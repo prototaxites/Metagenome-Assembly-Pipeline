@@ -661,7 +661,7 @@ do
 			rm -rf  $main_dir/mags/$part/logs/*
 			# prefix_input=${dir_name}_${part}
 			prefix_input=$prefix.$assembler.$part
-			mem=10000
+			mem=1000
 			# rm -rf $main_dir/mags/$part/complete
 			bsub -n16 -q long -R"span[hosts=1]" \
 				-o $main_dir/mags/$part/logs/metagenome_assembly_pipeline.%J.o \
@@ -696,186 +696,186 @@ do
 	done
 done < $assembly_directories
 
-while read line
-do
-	assembler=`echo $line | cut -d' ' -f1`
-	main_dir=`echo $line | cut -d' ' -f2`
-	dir_name=`basename $main_dir`
-	assembler_parts=`echo $assembly_haps | sed "s|alternate_primary||g"`
-	if [ "$assembler" == "flye" ] || [ "$assembler" == "metaflye" ] || [ "$assembler" == "meta-mdbg" ]
-	then
-		assembler_parts="all"
-	fi
-	for part in $assembler_parts
-	do
-		counter=0
-		while ! test -f $main_dir/mags/$part/complete && [ $counter -le 1440 ]
-		do
-			if [ $counter -eq 0 ]
-			then
-				date=`date`
-				echo "$date : Waiting for completion of $dir_name - $part"
-			fi
-			sleep 1m
-			counter=`expr $counter + 1`
-		done
-		if test -f $main_dir/mags/$part/bin_stats.csv
-		then
-			if ! test -f $outdir/bin_stats.csv
-			then
-				cp $main_dir/mags/$part/bin_stats.csv $outdir/bin_stats.csv
-			else
-				tail -n +2 $main_dir/mags/$part/bin_stats.csv >> $outdir/bin_stats.csv
-			fi
-		fi
-	done
-done < $assembly_directories
-
-if [ "$alternate_primary" == "TRUE" ]
-then
-	while read line
-	do
-		assembler=`echo $line | cut -d' ' -f1`
-		main_parts="alternate primary"
-		main_dir=`echo $line | cut -d' ' -f2`
-		mkdir -p $main_dir/mags/alternate_primary
-		touch $main_dir/mags/alternate_primary/error.txt
-		sed -i "/magscot/d" $main_dir/mags/alternate_primary/error.txt
-		dir_name=`basename $main_dir`
-		contig_info_input="-c $outdir/$dir_name.contig_info.tsv"
-		prefix_input=$prefix.$assembler.alternate_primary
-		maps=""
-		rm -rf $main_dir/mags/alternate_primary/bin_stats.csv
-		if [ "$assembler" != "metaflye" ] && [ "$assembler" != "flye" ]
-		then
-			echo -e "RUNNING ALTERNATE-PRIMARY BINNING FOR $assembler"
-			for part in $main_parts
-			do
-				for program in `echo $binning_programs | sed "s|,| |g"`
-				do
-					if test -d $main_dir/mags/$part/$program
-					then
-						if test -f $main_dir/mags/$part/$program/contigs2bin.tsv && [ `head $main_dir/mags/$part/$program/contigs2bin.tsv | wc -l` -gt 0 ]
-						then
-							if [ "$maps" == "" ]
-							then
-								maps=$main_dir/mags/$part/$program/contigs2bin.tsv
-							else
-								maps="$maps,$main_dir/mags/$part/$program/contigs2bin.tsv"
-							fi
-						fi
-					fi
-				done
-			done
-			if ! test -f $outdir/$dir_name.all.tmp.fa
-			then
-				assemblies=`cut -f2 $outdir/$dir_name.assemblies.txt`
-				for assembly in $assemblies
-				do
-					cat $assembly >> $outdir/$dir_name.all.tmp.fa
-				done
-			fi
-			assembly=$outdir/$dir_name.all.tmp.fa
-			# if `echo $refining_programs | grep -q 'magscot'` && ! test -d $main_dir/mags/alternate_primary/hmm
-			# then
-			# 	mkdir -p $main_dir/mags/alternate_primary/hmm
-			# 	ln -fs $main_dir/mags/all/hmm $main_dir/mags/alternate_primary
-			# fi
-			for refiner in `echo $refining_programs | sed "s|,| |g"`
-			do
-				mkdir -p $main_dir/mags/alternate_primary/${refiner}_raw
-				rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete
-				rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/gtdb/output/complete
-				if ! test -f $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete
-				then
-					mkdir -p $main_dir/mags/alternate_primary/logs
-					if test -d $main_dir/mags/alternate_primary/${refiner}_raw/gtdb/genomes
-					then
-						cp -R $main_dir/mags/alternate_primary/${refiner}_raw/gtdb/genomes $main_dir/mags/alternate_primary/${refiner}_raw/output_bins
-					fi
-					# rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete
-					echo "RUNNING $refiner for alternate_primary : $prefix_input"
-					rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/prokka
-					bsub -n$threads -q long -R"span[hosts=1]" \
-						-o $main_dir/mags/alternate_primary/logs/${refiner}_raw.%J.o \
-						-e $main_dir/mags/alternate_primary/logs/${refiner}_raw.%J.e \
-						-M50000 \
-						-R 'select[mem>50000] rusage[mem=50000]' \
-							"${refiner}_wrapper.sh -e \
-								-H $main_dir/mags/all/hmm \
-								-a $assembly \
-								-i $maps \
-								$contig_info_input \
-								-d $main_dir/mags/all/depth.tsv \
-								-b ${refiner}.raw \
-								-p $prefix_input \
-								-o $main_dir/mags/alternate_primary/${refiner}_raw \
-								-t $threads \
-								-E $main_dir/mags/alternate_primary/error.txt \
-								-D $main_dir/mags/alternate_primary/bin_stats.csv \
-								-l $main_dir/mags/alternate_primary/logs"
-					# ${refiner}_wrapper.sh -e \
-					# 	-H $main_dir/mags/all/hmm \
-					# 	-a $assembly \
-					# 	-i $maps \
-					# 	$contig_info_input \
-					# 	-d $main_dir/mags/all/depth.tsv \
-					# 	-b ${refiner}.raw \
-					# 	-p $prefix.$assembler.alternate_primary \
-					# 	-o $main_dir/mags/alternate_primary/${refiner}_raw \
-					# 	-t $threads \
-					# 	-E $main_dir/mags/alternate_primary/error.txt \
-					# 	-D $main_dir/mags/alternate_primary/bin_stats.csv \
-					# 	-l $main_dir/mags/alternate_primary/logs
-				fi
-			done
-		fi
-	done < $assembly_directories
-	while read line
-	do
-		assembler=`echo $line | cut -d' ' -f1`
-		main_dir=`echo $line | cut -d' ' -f2`
-		dir_name=`basename $main_dir`
-		assembler_parts=`echo $assembly_haps | sed "s|alternate_primary||g"`
-		if [ "$assembler" != "metaflye" ] && [ "$assembler" != "flye" ] && [ "$assembler" != "meta-mdbg" ]
-		then
-			for refiner in `echo $refining_programs | sed "s|,| |g"`
-			do
-				counter=0
-				while ! test -f $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete && [ $counter -le 1440 ] && ! test -f $main_dir/mags/alternate_primary/error.txt && ! `grep -q "$prefix.$assembler.alternate_primary"$'\t'$refiner".raw"$'\t'$refiner $main_dir/mags/alternate_primary/error.txt`
-				do
-					if [ $counter -eq 0 ]
-					then
-						date=`date`
-						echo "$date : Waiting for completion of $dir_name - alternate_primary - $refiner"
-					fi
-					sleep 1m
-					counter=`expr $counter + 1`
-				done
-			done
-			if test -f $main_dir/mags/alternate_primary/bin_stats.csv
-			then
-				if ! test -f $outdir/bin_stats.csv
-				then
-					cp $main_dir/mags/alternate_primary/bin_stats.csv $outdir/bin_stats.csv
-				else
-					tail -n +2 $main_dir/mags/alternate_primary/bin_stats.csv >> $outdir/bin_stats.csv
-				fi
-			fi
-		fi
-	done < $assembly_directories
-fi
-
-sed -i "s|archaea,bacteria|archaea;bacteria|g" $outdir/bin_stats.csv
-sed -i "s|archaea,euk|archaea;euk|g" $outdir/bin_stats.csv
-sed -i "s|bacteria,archaea|bacteria;archaea|g" $outdir/bin_stats.csv
-sed -i "s|bacteria,euk|bacteria;euk|g" $outdir/bin_stats.csv
-sed -i "s|euk,archaea|euk;archaea|g" $outdir/bin_stats.csv
-sed -i "s|euk,bacteria|euk;bacteria|g" $outdir/bin_stats.csv
-
-
-score_mag_outputs.py -p $outdir/final $outdir/bin_stats.csv
-
-rm -rf $outdir/*tmp*
-touch $outdir/complete
-	
+# while read line
+# do
+# 	assembler=`echo $line | cut -d' ' -f1`
+# 	main_dir=`echo $line | cut -d' ' -f2`
+# 	dir_name=`basename $main_dir`
+# 	assembler_parts=`echo $assembly_haps | sed "s|alternate_primary||g"`
+# 	if [ "$assembler" == "flye" ] || [ "$assembler" == "metaflye" ] || [ "$assembler" == "meta-mdbg" ]
+# 	then
+# 		assembler_parts="all"
+# 	fi
+# 	for part in $assembler_parts
+# 	do
+# 		counter=0
+# 		while ! test -f $main_dir/mags/$part/complete && [ $counter -le 1440 ]
+# 		do
+# 			if [ $counter -eq 0 ]
+# 			then
+# 				date=`date`
+# 				echo "$date : Waiting for completion of $dir_name - $part"
+# 			fi
+# 			sleep 1m
+# 			counter=`expr $counter + 1`
+# 		done
+# 		if test -f $main_dir/mags/$part/bin_stats.csv
+# 		then
+# 			if ! test -f $outdir/bin_stats.csv
+# 			then
+# 				cp $main_dir/mags/$part/bin_stats.csv $outdir/bin_stats.csv
+# 			else
+# 				tail -n +2 $main_dir/mags/$part/bin_stats.csv >> $outdir/bin_stats.csv
+# 			fi
+# 		fi
+# 	done
+# done < $assembly_directories
+#
+# if [ "$alternate_primary" == "TRUE" ]
+# then
+# 	while read line
+# 	do
+# 		assembler=`echo $line | cut -d' ' -f1`
+# 		main_parts="alternate primary"
+# 		main_dir=`echo $line | cut -d' ' -f2`
+# 		mkdir -p $main_dir/mags/alternate_primary
+# 		touch $main_dir/mags/alternate_primary/error.txt
+# 		sed -i "/magscot/d" $main_dir/mags/alternate_primary/error.txt
+# 		dir_name=`basename $main_dir`
+# 		contig_info_input="-c $outdir/$dir_name.contig_info.tsv"
+# 		prefix_input=$prefix.$assembler.alternate_primary
+# 		maps=""
+# 		rm -rf $main_dir/mags/alternate_primary/bin_stats.csv
+# 		if [ "$assembler" != "metaflye" ] && [ "$assembler" != "flye" ]
+# 		then
+# 			echo -e "RUNNING ALTERNATE-PRIMARY BINNING FOR $assembler"
+# 			for part in $main_parts
+# 			do
+# 				for program in `echo $binning_programs | sed "s|,| |g"`
+# 				do
+# 					if test -d $main_dir/mags/$part/$program
+# 					then
+# 						if test -f $main_dir/mags/$part/$program/contigs2bin.tsv && [ `head $main_dir/mags/$part/$program/contigs2bin.tsv | wc -l` -gt 0 ]
+# 						then
+# 							if [ "$maps" == "" ]
+# 							then
+# 								maps=$main_dir/mags/$part/$program/contigs2bin.tsv
+# 							else
+# 								maps="$maps,$main_dir/mags/$part/$program/contigs2bin.tsv"
+# 							fi
+# 						fi
+# 					fi
+# 				done
+# 			done
+# 			if ! test -f $outdir/$dir_name.all.tmp.fa
+# 			then
+# 				assemblies=`cut -f2 $outdir/$dir_name.assemblies.txt`
+# 				for assembly in $assemblies
+# 				do
+# 					cat $assembly >> $outdir/$dir_name.all.tmp.fa
+# 				done
+# 			fi
+# 			assembly=$outdir/$dir_name.all.tmp.fa
+# 			# if `echo $refining_programs | grep -q 'magscot'` && ! test -d $main_dir/mags/alternate_primary/hmm
+# 			# then
+# 			# 	mkdir -p $main_dir/mags/alternate_primary/hmm
+# 			# 	ln -fs $main_dir/mags/all/hmm $main_dir/mags/alternate_primary
+# 			# fi
+# 			for refiner in `echo $refining_programs | sed "s|,| |g"`
+# 			do
+# 				mkdir -p $main_dir/mags/alternate_primary/${refiner}_raw
+# 				rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete
+# 				rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/gtdb/output/complete
+# 				if ! test -f $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete
+# 				then
+# 					mkdir -p $main_dir/mags/alternate_primary/logs
+# 					if test -d $main_dir/mags/alternate_primary/${refiner}_raw/gtdb/genomes
+# 					then
+# 						cp -R $main_dir/mags/alternate_primary/${refiner}_raw/gtdb/genomes $main_dir/mags/alternate_primary/${refiner}_raw/output_bins
+# 					fi
+# 					# rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete
+# 					echo "RUNNING $refiner for alternate_primary : $prefix_input"
+# 					rm -rf $main_dir/mags/alternate_primary/${refiner}_raw/prokka
+# 					bsub -n$threads -q long -R"span[hosts=1]" \
+# 						-o $main_dir/mags/alternate_primary/logs/${refiner}_raw.%J.o \
+# 						-e $main_dir/mags/alternate_primary/logs/${refiner}_raw.%J.e \
+# 						-M50000 \
+# 						-R 'select[mem>50000] rusage[mem=50000]' \
+# 							"${refiner}_wrapper.sh -e \
+# 								-H $main_dir/mags/all/hmm \
+# 								-a $assembly \
+# 								-i $maps \
+# 								$contig_info_input \
+# 								-d $main_dir/mags/all/depth.tsv \
+# 								-b ${refiner}.raw \
+# 								-p $prefix_input \
+# 								-o $main_dir/mags/alternate_primary/${refiner}_raw \
+# 								-t $threads \
+# 								-E $main_dir/mags/alternate_primary/error.txt \
+# 								-D $main_dir/mags/alternate_primary/bin_stats.csv \
+# 								-l $main_dir/mags/alternate_primary/logs"
+# 					# ${refiner}_wrapper.sh -e \
+# 					# 	-H $main_dir/mags/all/hmm \
+# 					# 	-a $assembly \
+# 					# 	-i $maps \
+# 					# 	$contig_info_input \
+# 					# 	-d $main_dir/mags/all/depth.tsv \
+# 					# 	-b ${refiner}.raw \
+# 					# 	-p $prefix.$assembler.alternate_primary \
+# 					# 	-o $main_dir/mags/alternate_primary/${refiner}_raw \
+# 					# 	-t $threads \
+# 					# 	-E $main_dir/mags/alternate_primary/error.txt \
+# 					# 	-D $main_dir/mags/alternate_primary/bin_stats.csv \
+# 					# 	-l $main_dir/mags/alternate_primary/logs
+# 				fi
+# 			done
+# 		fi
+# 	done < $assembly_directories
+# 	while read line
+# 	do
+# 		assembler=`echo $line | cut -d' ' -f1`
+# 		main_dir=`echo $line | cut -d' ' -f2`
+# 		dir_name=`basename $main_dir`
+# 		assembler_parts=`echo $assembly_haps | sed "s|alternate_primary||g"`
+# 		if [ "$assembler" != "metaflye" ] && [ "$assembler" != "flye" ] && [ "$assembler" != "meta-mdbg" ]
+# 		then
+# 			for refiner in `echo $refining_programs | sed "s|,| |g"`
+# 			do
+# 				counter=0
+# 				while ! test -f $main_dir/mags/alternate_primary/${refiner}_raw/binstats_complete && [ $counter -le 1440 ] && ! test -f $main_dir/mags/alternate_primary/error.txt && ! `grep -q "$prefix.$assembler.alternate_primary"$'\t'$refiner".raw"$'\t'$refiner $main_dir/mags/alternate_primary/error.txt`
+# 				do
+# 					if [ $counter -eq 0 ]
+# 					then
+# 						date=`date`
+# 						echo "$date : Waiting for completion of $dir_name - alternate_primary - $refiner"
+# 					fi
+# 					sleep 1m
+# 					counter=`expr $counter + 1`
+# 				done
+# 			done
+# 			if test -f $main_dir/mags/alternate_primary/bin_stats.csv
+# 			then
+# 				if ! test -f $outdir/bin_stats.csv
+# 				then
+# 					cp $main_dir/mags/alternate_primary/bin_stats.csv $outdir/bin_stats.csv
+# 				else
+# 					tail -n +2 $main_dir/mags/alternate_primary/bin_stats.csv >> $outdir/bin_stats.csv
+# 				fi
+# 			fi
+# 		fi
+# 	done < $assembly_directories
+# fi
+#
+# sed -i "s|archaea,bacteria|archaea;bacteria|g" $outdir/bin_stats.csv
+# sed -i "s|archaea,euk|archaea;euk|g" $outdir/bin_stats.csv
+# sed -i "s|bacteria,archaea|bacteria;archaea|g" $outdir/bin_stats.csv
+# sed -i "s|bacteria,euk|bacteria;euk|g" $outdir/bin_stats.csv
+# sed -i "s|euk,archaea|euk;archaea|g" $outdir/bin_stats.csv
+# sed -i "s|euk,bacteria|euk;bacteria|g" $outdir/bin_stats.csv
+#
+#
+# score_mag_outputs.py -p $outdir/final $outdir/bin_stats.csv
+#
+# rm -rf $outdir/*tmp*
+# touch $outdir/complete
+#

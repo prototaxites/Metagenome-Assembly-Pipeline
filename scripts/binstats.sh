@@ -443,11 +443,12 @@ awk -F'\t' -v ext=$extension '{if($13 <= 10){OFS=","; $1 = $1"."ext; print $1,$1
 
 filtered_bins=`tail -n +2 $outdir/drep/checkm.csv \
 	| cut -d',' -f1`
+rm -rf $outdir/drep/prefilter/*
 for bin in $filtered_bins
 do
 	# if [ `grep -v $'^>' $outdir/gtdb/genomes/$bin | wc -c` -ge 50000 ]
 	# then
-	ln -fs $input_bins/$bin \
+	cp $input_bins/$bin \
 		$outdir/drep/prefilter/
 	# fi
 done
@@ -459,10 +460,12 @@ then
 	then
 		echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Dereplicating bins with DREP ####" >> $logout/mag_pipe_progress.log
 		echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Dereplicating bins with DREP ####"
-		dRep dereplicate drep \
-			-p 30  \
-			-g $outdir/drep/prefilter/*.$extension \
-			--genomeInfo $outdir/drep/checkm.csv
+		singularity exec -B /lustre,/nfs \
+			$LOCAL_IMAGES/drep.sif \
+				dRep dereplicate drep \
+					-p 30  \
+					-g $outdir/drep/prefilter/*.$extension \
+					--genomeInfo $outdir/drep/checkm.csv
 		if ! test -d $outdir/drep/dereplicated_genomes || [ `ls $outdir/drep/dereplicated_genomes | wc -l` -eq 0 ] || [ `ls $outdir/drep/prefilter/ | grep $extension$'$' | wc -l` -eq 0 ]
 		then
 			echo -e "$prefix\t$binning_program\t$refinement_tool\tdrep" >> $ERROR_OUT

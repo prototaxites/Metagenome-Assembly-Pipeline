@@ -317,11 +317,12 @@ do
 	then
 		echo "#### RUNNING WRAPPER FOR $program ####" >> $logout/mag_pipe_progress.log
 		echo "#### RUNNING WRAPPER FOR $program ####"
+		
 		bsub -n$threads -q long -R"span[hosts=1]" \
 			-o $outdir/logs/${program}.%J.o \
 			-e $outdir/logs/${program}.%J.e \
-			-M300000 \
-			-R 'select[mem>300000] rusage[mem=300000]' \
+			-M80000 \
+			-R 'select[mem>80000] rusage[mem=80000]' \
 				"${program}_wrapper.sh -R \
 					-a $assembly \
 					-c $contig_info \
@@ -409,8 +410,8 @@ then
 				bsub -n$threads -q long -R"span[hosts=1]" \
 					-o $outdir/logs/${refiner}_raw.%J.o \
 					-e $outdir/logs/${refiner}_raw.%J.e \
-					-M100000 \
-					-R 'select[mem>100000] rusage[mem=100000]' \
+					-M40000 \
+					-R 'select[mem>40000] rusage[mem=40000]' \
 						"${refiner}_wrapper.sh -e \
 							-H $outdir/hmm \
 							-a $assembly \
@@ -517,8 +518,8 @@ then
 				bsub -n$threads -q long -R"span[hosts=1]" \
 					-o $outdir/logs/${refiner}_filtered.%J.o \
 					-e $outdir/logs/${refiner}_filtered.%J.e \
-					-M100000 \
-					-R 'select[mem>100000] rusage[mem=100000]' \
+					-M40000 \
+					-R 'select[mem>40000] rusage[mem=40000]' \
 						"${refiner}_wrapper.sh -e \
 							-H $outdir/hmm \
 							-a $assembly \
