@@ -28,14 +28,14 @@ def store_ncbi_txdmp(txdmp_dir):
     txdmp_dict = {"nodes": {}, "names_scientific": {}, "names_all": {}}
     with open("{}/nodes.dmp".format(txdmp_dir), 'r') as data:
         for line in data.readlines():
-            line = re.sub("\t\|$", "", line.rstrip())
-            split_line = re.split(r'\s\|\s', line.strip())
+            line = re.sub("\t|$", "", line.rstrip())
+            split_line = re.split(r'\|', line.strip())
             txdmp_dict["nodes"][split_line[0]] = split_line[1:3]
             txdmp_dict["nodes"][split_line[0]][1] = txdmp_dict["nodes"][split_line[0]][1].replace("superkingdom", "domain")
     with open("{}/names.dmp".format(txdmp_dir), 'r') as data:
         for line in data.readlines():
-            line = re.sub("\t\|$", "", line.rstrip())
-            split_line = re.split(r'\s\|\s', line.strip())
+            line = re.sub("\t|$", "", line.rstrip())
+            split_line = re.split(r'\|', line.strip())
             if split_line[3] in ["scientific name", "synonym", "equivalent name"]:
                 txdmp_dict["names_all"][split_line[1]] = split_line[0]
                 if split_line[3] == "scientific name":
@@ -92,7 +92,7 @@ def gtdb2ncbi(gtdb_lineage, txdmp_dict, altname_dict):
                 replace(" cyanobacterium", "").\
                 replace(" sp.", "").\
                 replace("uncultured ", "")
-            tmp_taxon = re.sub(' \(.*\)', '', tmp_taxon)
+            tmp_taxon = re.sub(r' \(.*\)', '', tmp_taxon)
             if tmp_taxon not in txdmp_dict["names_all"].keys():
                 tmp_taxon = tmp_taxon.title()
             tmp_taxid = txdmp_dict["names_all"][tmp_taxon]

@@ -261,12 +261,14 @@ if ! test -f $outdir/checkm/results.tsv || [ `cat $outdir/checkm/results.tsv | w
 then
 	echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Generating bin quality metrics with CheckM ####" >> $logout/mag_pipe_progress.log
 	echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Generating bin quality metrics with CheckM ####"
-	checkm lineage_wf \
-		-t $threads -x $extension \
-		--tab_table \
-		-f $outdir/checkm/results.tsv \
-		$input_bins \
-		$outdir/checkm
+	singularity exec -B /lustre,/nfs \
+		$LOCAL_IMAGES/checkm.sif \
+			checkm lineage_wf \
+			-t $threads -x $extension \
+			--tab_table \
+			-f $outdir/checkm/results.tsv \
+			$input_bins \
+			$outdir/checkm
 fi
 if ! test -f $outdir/checkm/results.tsv || [ `cat $outdir/checkm/results.tsv | wc -l` -eq 1 ]
 then
@@ -284,11 +286,13 @@ if ! test -f $outdir/checkm_ssu/ssu_summary.tsv || [ `cat $outdir/checkm_ssu/ssu
 then
 	echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Identifying SSUs in binned assemblies with CheckM ####" >> $logout/mag_pipe_progress.log
 	echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Identifying SSUs in binned assemblies with CheckM ####"
-	checkm ssu_finder \
-		-t $threads -x $extension \
-		$assembly \
-		$input_bins \
-		$outdir/checkm_ssu
+	singularity exec -B /lustre,/nfs \
+		$LOCAL_IMAGES/checkm.sif \
+			checkm ssu_finder \
+				-t $threads -x $extension \
+				$assembly \
+				$input_bins \
+				$outdir/checkm_ssu
 fi
 if ! test -f $outdir/checkm_ssu/ssu_summary.tsv || [ `cat $outdir/checkm_ssu/ssu_summary.tsv | wc -l` -le 1 ]
 then
@@ -380,13 +384,15 @@ then
 			rm -rf $outdir/prokka/temp
 			mkdir -p $outdir/prokka/temp
 			cd $outdir/prokka/temp
-			prokka \
-				--rfam \
-				--cpus 0 \
-				--noanno \
-				--rawproduct \
-				--kingdom $domain \
-				$file
+			singularity exec -B /lustre,/nfs \
+				$LOCAL_IMAGES/prokka.sif \
+					prokka \
+						--rfam \
+						--cpus 0 \
+						--noanno \
+						--rawproduct \
+						--kingdom $domain \
+						$file
 			total_trna=`grep "tRNA" $outdir/prokka/temp/PROKKA_*/PROKKA_*.txt | cut -d' ' -f2`
 			if [ "$total_trna" == "" ]
 			then

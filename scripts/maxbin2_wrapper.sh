@@ -236,13 +236,15 @@ then
 			then
 				echo "#### MAXBIN2 WRAPPER: Mapping long reads to assembly ####" >> $logout/mag_pipe_progress.log
 				echo "#### MAXBIN2 WRAPPER: Mapping long reads to assembly ####"
-				minimap2 \
-					-a -t $threads \
-					-x map-hifi \
-					$assembly $reads \
-					| samtools view -b - \
-					| samtools sort -@ $threads - \
-					> $outdir/$prefix.bam
+				singularity exec -B /lustre,/nfs \
+					$LOCAL_IMAGES/minimap2.sif \
+						minimap2 \
+							-a -t $threads \
+							-x map-hifi \
+							$assembly $reads \
+							| samtools view -b - \
+							| samtools sort -@ $threads - \
+							> $outdir/$prefix.bam
 			fi
 			echo "#### MAXBIN2 WRAPPER: Calculating contig read depth ####" >> $logout/mag_pipe_progress.log
 			echo "#### MAXBIN2 WRAPPER: Calculating contig read depth ####" 

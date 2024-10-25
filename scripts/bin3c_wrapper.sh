@@ -253,7 +253,7 @@ then
 		echo "#### BIN3C WRAPPER: Mapping HiC reads to assembly ####" >> $logout/mag_pipe_progress.log
 		echo "#### BIN3C WRAPPER: Mapping HiC reads to assembly ####"
 		singularity exec -B /lustre,/nfs \
-			/software/tola/images/bwa-mem2-2.2.1.sif \
+			$LOCAL_IMAGES/bwa-mem2.sif \
 				bwa-mem2 mem \
 					-t 16 -5SP \
 					$assembly \

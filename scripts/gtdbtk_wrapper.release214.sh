@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release220
+GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release214
 NCBI_TAXDUMP="$GTDBTK_DB/`ls $GTDBTK_DB | grep 'ncbi_taxdump' | sort -r | head -1`"
 IMG_DIR=/software/team311/ng13/local/images
 ALTERNATE_KEY=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/ncbi_altkey.csv
@@ -164,7 +164,7 @@ then
 		| cut -f17,79 > $GTDBTK_DB/metadata.tsv
 fi
 
-if [ "$NCBI_TAXDUMP" == "" ] || [ "$NCBI_TAXDUMP" == "$GTDBTK_DB/" ] || ! test -d $NCBI_TAXDUMP || [ `ls $GTDBTK_DB | grep 'ncbi_taxdump' | sort -r | head -1 | awk -F'[/.]' '{print $NF}' | cut -c1-6` -ne `date +'%Y%m'` ]
+if [ "$NCBI_TAXDUMP" == "" ] || ! test -d $NCBI_TAXDUMP || [ `ls $GTDBTK_DB | grep 'ncbi_taxdump' | sort -r | head -1 | awk -F'[/.]' '{print $NF}' | cut -c1-6` -ne `date +'%Y%m'` ]
 then
 	if [ `ls $GTDBTK_DB | grep 'ncbi_taxdump' | sort -r | head -1 | awk -F'[/.]' '{print $NF}' | cut -c1-6` -ne `date +'%Y%m'` ]
 	then

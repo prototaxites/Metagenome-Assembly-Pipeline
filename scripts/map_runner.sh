@@ -508,8 +508,10 @@ do
 	done
 	if `echo $binning_programs | grep -q "metabat2"` || `echo $binning_programs | grep -q "maxbin2"`
 	then
-		if ! test -d $main_dir/mags/all && ! test -f $main_dir/mags/all/depth.tsv
+		echo "line 511"
+		if ! test -d $main_dir/mags/all || ! test -f $main_dir/mags/all/depth.tsv
 		then
+			echo "line 514"
 			mkdir -p $main_dir/mags/all
 			assembly=$outdir/$dir_name.all.tmp.fa
 			echo "#### Mapping reads to assembly ####"
@@ -522,13 +524,15 @@ do
 				-e $outdir/minimap.$dir_name.%J.e \
 				-M100000 \
 				-R "select[mem>100000] rusage[mem=100000]" \
-					"minimap2 \
-						-a -t $threads \
-						-x map-hifi \
-						$assembly $reads \
-						| samtools view -T $assembly -b - \
-						| samtools sort -T $assembly -@ $threads - \
-						> $main_dir/mags/all/$prefix.$assembler.all.bam \
+					"singularity exec -B /lustre,/nfs \
+						$LOCAL_IMAGES/minimap2.sif \
+							minimap2 \
+								-a -t $threads \
+								-x map-hifi \
+								$assembly $reads \
+								| samtools view -T $assembly -b - \
+								| samtools sort -T $assembly -@ $threads - \
+								> $main_dir/mags/all/$prefix.$assembler.all.bam \
 					&& singularity exec -B /lustre,/nfs \
 						$LOCAL_IMAGES/metabat.sif \
 							jgi_summarize_bam_contig_depths \
@@ -543,29 +547,35 @@ do
 		if ! test -f $hmm_dir/input.hmm
 		then
 			assembly=$outdir/$dir_name.all.tmp.fa
-			bsub -n8 -R"span[hosts=1]" \
+			bsub -n8 -q long -R"span[hosts=1]" \
 				-o $outdir/hmm.$dir_name.%J.o \
 				-e $outdir/hmm.$dir_name.%J.e \
 				-M20000 \
 				-R "select[mem>20000] rusage[mem=20000]" \
-					"cat $assembly \
-						| prodigal \
-							-p meta \
-							-a $hmm_dir/prodigal.faa \
-							-d $hmm_dir/prodigal.ffn \
-							-o $hmm_dir/tmpfile \
-					&& hmmsearch \
-						-o $hmm_dir/hmm.tigr.out \
-						--tblout $hmm_dir/hmm.tigr.hit.out \
-						--noali --notextw --cut_nc --cpu $threads \
-						$GTDBTK_DB/hmm/gtdbtk_rel207_tigrfam.hmm \
-						$hmm_dir/prodigal.faa \
-					&& hmmsearch \
-						-o $hmm_dir/hmm.pfam.out \
-						--tblout $hmm_dir/hmm.pfam.hit.out \
-						--noali --notextw --cut_nc --cpu $threads \
-						$GTDBTK_DB/hmm/gtdbtk_rel207_Pfam-A.hmm \
-						$hmm_dir/prodigal.faa"
+					"singularity exec -B /lustre,/nfs \
+						$LOCAL_IMAGES/prodigal.sif \
+							prodigal \
+								-i $assembly \
+								-p meta \
+								-a $hmm_dir/prodigal.faa \
+								-d $hmm_dir/prodigal.ffn \
+								-o $hmm_dir/tmpfile \
+					&& singularity exec -B /lustre,/nfs \
+						$LOCAL_IMAGES/hmmer.sif \
+							hmmsearch \
+								-o $hmm_dir/hmm.tigr.out \
+								--tblout $hmm_dir/hmm.tigr.hit.out \
+								--noali --notextw --cut_nc --cpu $threads \
+								$GTDBTK_DB/hmm/gtdbtk_rel207_tigrfam.hmm \
+								$hmm_dir/prodigal.faa \
+					&& singularity exec -B /lustre,/nfs \
+						$LOCAL_IMAGES/hmmer.sif \
+							hmmsearch \
+								-o $hmm_dir/hmm.pfam.out \
+								--tblout $hmm_dir/hmm.pfam.hit.out \
+								--noali --notextw --cut_nc --cpu $threads \
+								$GTDBTK_DB/hmm/gtdbtk_rel207_Pfam-A.hmm \
+								$hmm_dir/prodigal.faa"
 		fi
 	fi
 done < $assembly_directories

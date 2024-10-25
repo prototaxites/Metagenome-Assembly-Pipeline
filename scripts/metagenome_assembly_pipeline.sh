@@ -34,6 +34,10 @@ Noah Gettle 2023"
 
 outdir="./metagenome_pipeline"
 combine_refined="FALSE"
+metabat2_mem=50000
+maxbin2_mem=50000
+bin3c_mem=600000
+metator_mem=200000
 threads=1
 while [ "$1" != "" ]
 do
@@ -165,6 +169,30 @@ do
 					export GTDBTK_DB=$gtdbtk_db
 				fi
 			fi;;
+		--metabat2_mem)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				metabat2_mem=$1
+			fi;;
+		--maxbin2_mem)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				maxbin2_mem=$1
+			fi;;
+		--bin3c_mem)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				bin3c_mem=$1
+			fi;;
+		--metator_mem)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				metator_mem=$1
+			fi;;
 		-h | --help)
 			echo -e $usage
 			exit 0;;
@@ -258,13 +286,15 @@ then
 			then
 				samtools faidx $assembly
 			fi
-			minimap2 \
-				-a -t $threads \
-				-x map-hifi \
-				$assembly $reads \
-				| samtools view -T $assembly -b - \
-				| samtools sort -T $assembly -@ $threads - \
-				> $outdir/$prefix.bam 
+			singularity exec -B /lustre,/nfs \
+				$LOCAL_IMAGES/minimap2.sif \
+					minimap2 \
+						-a -t $threads \
+						-x map-hifi \
+						$assembly $reads \
+						| samtools view -T $assembly -b - \
+						| samtools sort -T $assembly -@ $threads - \
+						> $outdir/$prefix.bam 
 		fi
 		echo "#### MAIN: Calculating contig read depth ####" >> $logout/mag_pipe_progress.log
 		echo "#### MAIN: Calculating contig read depth ####"
@@ -317,12 +347,28 @@ do
 	then
 		echo "#### RUNNING WRAPPER FOR $program ####" >> $logout/mag_pipe_progress.log
 		echo "#### RUNNING WRAPPER FOR $program ####"
-		
-		bsub -n$threads -q long -R"span[hosts=1]" \
+		mem=50000
+		queue=long
+		if [ "$program" == "metabat2" ]
+		then
+			mem=$metabat2_mem
+		elif [ "$program" == "maxbin2" ]
+		then
+			mem=$maxbin2_mem
+		elif [ "$program" == "bin3c" ]
+		then
+			mem=$bin3c_mem
+			queue=basement
+		elif [ "$program" == "metator" ]
+		then
+			mem=$metator_mem
+			queue=basement
+		fi
+		bsub -n$threads -q $queue -R"span[hosts=1]" \
 			-o $outdir/logs/${program}.%J.o \
 			-e $outdir/logs/${program}.%J.e \
-			-M80000 \
-			-R 'select[mem>80000] rusage[mem=80000]' \
+			-M$mem \
+			-R "select[mem>$mem] rusage[mem=$mem]" \
 				"${program}_wrapper.sh -R \
 					-a $assembly \
 					-c $contig_info \

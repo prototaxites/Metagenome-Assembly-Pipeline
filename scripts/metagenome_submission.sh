@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release207_v2
+GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release214
 NCBI_TAXDUMP="$GTDBTK_DB/`ls $GTDBTK_DB | grep 'ncbi_taxdump' | sort -r | head -1`"
 group_key=/lustre/scratch124/tol/projects/darwin/users/ng13/group_key.tsv
 metagenome_taxids=/lustre/scratch124/tol/projects/darwin/users/ng13/organismal_metagenome_taxids.tsv
@@ -13,6 +13,7 @@ DESCRIPTION: Takes input information to prep and send metagenome curation reques
     check              --> Classify bins with GTDB-TK, if necessary, and create submission form for new taxon ids\n\
     biosample_prep     --> Create directories containing information for biosample creation\n\
     spreadsheet_update --> Create CSV to update the ToL Informatics Sheet\n\
+	generate_chromosome_list --> Annotate MAG contigs as plasmids/chromosomes\n\
     curation_request   --> Create YAMLs and send curation requests\n\
 OPTIONS:\n\
     -a | --assembly              Assembly (can be gzipped)\n\
@@ -31,6 +32,7 @@ OPTIONS:\n\
     -s | --species               Species\n\
     -c | --biosample_configs     BioSample config file\n\
 	-C | --contig_info           Contig info TSV in format \"contig\tcontig_length\tcontig_depth\tcircular\"\n\
+	-l | --chromosome_list		 Contig chromosome annotations in format \"bin\tcontig\tchromosome_type\"\n\
     -o | --outdir                Output directory\n\
     -h | --help                  Print help message\n\n\
 \n\n\
@@ -41,7 +43,7 @@ if ! `beginswith "-" $1`
 then
 	command=$1
 	shift
-	if [ "$command" != "config_file" ] && [ "$command" != "check" ] && [ "$command" != "biosample_prep" ] && [ "$command" != "spreadsheet_update" ] && [ "$command" != "curation_request" ]
+	if [ "$command" != "config_file" ] && [ "$command" != "check" ] && [ "$command" != "biosample_prep" ] && [ "$command" != "spreadsheet_update" ] && [ "$command" != "curation_request" ] && [ "$command" != "generate_chromosome_list" ]
 	then
 		echo -e "#### UNKNOWN COMMAND: $command ####\n\n$usage"
 		exit 1
@@ -195,6 +197,17 @@ do
 				shift
 				outdir=$1
 				mkdir -p $outdir
+			fi;;
+		-l | --chromosome_list)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				chromosome_list=$1
+				if ! test -f $chromosome_list
+				then
+					echo -e "#### ERROR: Could not find input chromosome list file $chromosome_list. ####\n\n$usage"
+					exit 1
+				fi
 			fi;;
 		-h | --help)
 			echo -e $usage
@@ -385,7 +398,7 @@ fi
 
 if [ "$GTDBTK_DB" == "" ]
 then
-	export GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release207_v2
+	export GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release214
 fi
 
 if [ "$NCBI_TAXDUMP" == "" ] || ! test -d $NCBI_TAXDUMP || [ `ls $GTDBTK_DB | grep 'ncbi_taxdump' | sort -r | head -1 | awk -F'[/.]' '{print $NF}' | cut -c1-6` -ne `date +'%Y%m'` ]
@@ -470,20 +483,20 @@ fi
 ######################################################################################
 #### CREATE BIOSAMPLE CONFIG FILE ####
 ######################################
-hifiasm_version="Hifiasm (version 0.16.1-r375)"
-hifiasm_meta_version="Hifiasm-Meta (version 0.3-r061); Hifiasm (version 0.13-r308)"
-flye_version="Flye (version 2.9-b1768)"
+hifiasm_version="Hifiasm (version 0.19.8)"
+hifiasm_meta_version="Hifiasm-Meta (version 0.0.2); Hifiasm (vversion 0.19.8)"
+flye_version="Flye (version 2.9.3)"
 canu_version="Canu (version 2.2)"
-meta_mdbg_version="metaMDBG"
-metabat2_version="MetaBat (version 2.15-15-gd6ea400)"
+meta_mdbg_version="metaMDBG (version 0.3)"
+metabat2_version="MetaBat (version 2.15)"
 bin3c_version="bin3C (version 0.3.3)"
-maxbin2_version="MaxBin (version 2.7)"
+maxbin2_version="MaxBin (version 2.2.7)"
 metator_version="MetaTOR"
 dastool_version="DASTOOL (version 1.1.5)"
 magscot_version="MAGScoT (version 1.0.0)"
-checkm_version="checkM (version 1.2.1); checkM_DB (release 2015-01-16)"
-prokka_version="PROKKA (version 1.14.5)"
-gtdbtk_version="GTDB-TK (version 2.3.2); GTDB (release 214)"
+checkm_version="checkM (version 1.2.2); checkM_DB (release 2015-01-16)"
+prokka_version="PROKKA (version 1.14.6)"
+gtdbtk_version="GTDB-TK (version 2.4.0); GTDB (release 214)"
 minimap_version="Minimap2 (version 2.24-r1122)"
 
 if [ "$command" == "config_file" ]
@@ -728,7 +741,15 @@ then
 	primary_biosample=`grep $'^'primary"," $biosample_accessions | cut -d',' -f3`
 	primary_tolid=`grep $'^'primary"," $biosample_accessions | cut -d',' -f2`
 	bins=`tail -n +2 $biosample_accessions | grep -v 'primary' | cut -d',' -f1`
-	header_line=`head -1 $bin_data | sed "s|$|,primary_tolid,primary_biosample,tolid,bin_type,biosample|"`
+	header_line=`head -1 $bin_data | sed "s|$|,primary_tolid,primary_biosample,tolid,bin_type,biosample,group,project|" \
+		| sed "s|^host,|host,host_species,|g"`
+	host_tolid=`tail -n +2 $bin_data | head -1 | cut -d',' -f1`
+	first=`echo $host_tolid | cut -c1-1`
+	group=`grep $'^'$first',' /lustre/scratch124/tol/projects/darwin/users/ng13/tolid_groups.csv \
+		| cut -d',' -f2`
+	project=`grep $'\t'$host_tolid$'\t' /lustre/scratch123/tol/tolqc/track/tol_sts.tsv \
+		| head -1 | cut -f3`
+	project=${project,,}
 	echo $header_line > $outdir/bin_data.full.csv
 	for bin in $bins
 	do
@@ -740,7 +761,8 @@ then
 		then
 			bin_type="MAG"
 		fi
-		echo "$bin_line,$primary_tolid,$primary_biosample,$tolid,$bin_type,$biosample" >> $outdir/bin_data.full.csv
+		bin_line=`echo $bin_line | sed "s|^$host_tolid,|$host_tolid,$host_taxname,|"`
+		echo "$bin_line,$primary_tolid,$primary_biosample,$tolid,$bin_type,$biosample,$group,$project" >> $outdir/bin_data.full.csv
 	done
 	format_bindata.py -p $outdir/bin_data.spreadsheet_update $outdir/bin_data.full.csv
 	mags=`grep ',MAG,' $outdir/bin_data.spreadsheet_update.csv | wc -l`
@@ -749,6 +771,108 @@ then
 		> $outdir/primary.spreadsheet_update.csv
 	echo -e "$tol_id,$host_taxname,$host_taxid,$host_biospecimen,$tol_id.metagenome,$primary_taxon,$primary_taxid,$mags,$binned_metagenomes,$primary_biosample,,,," \
 		>> $outdir/primary.spreadsheet_update.csv
+fi
+
+######################################################################################
+#### CHROMOSOME LIST ####
+##########################
+
+if [ "$command" == "generate_chromosome_list" ]
+then
+	. $biosample_configs
+	bin_field=`head -1  $bin_data \
+		| sed "s|,|\n|g" \
+		| grep -n $'^bin_id$' \
+		| cut -d':' -f1`
+	quality_field=`head -1  $bin_data \
+		| sed "s|,|\n|g" \
+		| grep -n $'^quality$' \
+		| cut -d':' -f1`
+	drep_field=`head -1  $bin_data \
+		| sed "s|,|\n|g" \
+		| grep -n $'^drep$' \
+		| cut -d':' -f1`
+	mags=`tail -n +2 $bin_data \
+		| awk -F',' -v B=$bin_field -v Q=$quality_field -v D=$drep_field '{if($Q == "HIGH" && $D == "PASSED") {print $B}}'`
+	rm -rf $outdir/circ.tmp.list
+	rm -rf $outdir/single.tmp.list
+	for mag in $mags
+	do
+		count=`grep $'\t'$mag$'$' $directory/$binning_program/contigs2bin.tsv | wc -l`
+		# grep $'\t'$mag$'$' $directory/$binning_program/contigs2bin.tsv \
+		# 	| grep $'c\t' \
+		# 	| cut -f1 \
+		# 	>> $outdir/circ.tmp.list
+		contigs=`grep $'\t'$mag$'$' $directory/$binning_program/contigs2bin.tsv \
+			| cut -f1`
+		for contig in $contigs
+		do
+			if [ `grep $contig$'\t' $contig_info | cut -f4` == "Y" ]
+			then
+				echo $contig >> $outdir/circ.tmp.list
+			fi
+		done
+		if [ $count -eq 1 ]
+		then
+			grep $'\t'$mag$'$' $directory/$binning_program/contigs2bin.tsv \
+				| cut -f1 \
+					>> $outdir/single.tmp.list
+		fi
+	done
+	if test -f $outdir/circ.tmp.list && [ `cat $outdir/circ.tmp.list | wc -l` -gt 0 ]
+	then
+		assembly_dir=`dirname $assembly`
+		if ! test -f $assembly_dir/contigs.fasta
+		then
+			gunzip -c $assembly \
+				> $assembly_dir/contigs.fasta
+		fi
+		select_fasta_by_list.pl \
+			-i $assembly_dir/contigs.fasta \
+			-l $outdir/circ.tmp.list \
+			-o $outdir/circular_contigs.fa
+		fastalength $outdir/circular_contigs.fa \
+			> $outdir/circular_contigs.len
+		singularity run -B /lustre,/nfs \
+			$LOCAL_IMAGES/genomad.sif end-to-end \
+				$outdir/circular_contigs.fa \
+				$outdir/genomad_output \
+				$GENOMAD_DB
+	fi
+	rm -rf $outdir/chromosome_list.tsv
+	if test -f $outdir/circ.tmp.list
+	then
+		while read contig
+		do
+			len=`grep $' '$contig$'$' $outdir/circular_contigs.len | cut -d' ' -f1`
+			mag=`grep $'^'$contig$'\t' $directory/$binning_program/contigs2bin.tsv | cut -f2`
+			plasmid=`grep $contig$'\t' $outdir/genomad_output/circular_contigs_summary/circular_contigs_plasmid_summary.tsv \
+				| awk -F'\t' '{if($6 >= 95){print "true"}else{print "false"}}'`
+			if [ "$plasmid" == "true" ]
+			then
+				echo -e "$mag\t$contig\tCircular-Plasmid" >> $outdir/chromosome_list.tsv
+			elif [ $len -ge 500000 ]
+			then
+				echo -e "$mag\t$contig\tCircular-Chromosome" >> $outdir/chromosome_list.tsv
+			fi
+		done < $outdir/circ.tmp.list
+	fi
+	if test -f $outdir/single.tmp.list
+	then
+		while read contig
+		do
+			if ! `grep -q $'\t'$contig$'\t' $outdir/chromosome_list.tsv`
+			then
+				mag=`grep $'^'$contig$'\t' $directory/$binning_program/contigs2bin.tsv | cut -f2`
+				if `echo $contig | grep -q $'c$'`
+				then
+					echo -e "$mag\t$contig\tCircular-Chromosome" >> $outdir/chromosome_list.tsv
+				else
+					echo -e "$mag\t$contig\tLinear-Chromosome" >> $outdir/chromosome_list.tsv
+				fi
+			fi
+		done < $outdir/single.tmp.list
+	fi
 fi
 
 ######################################################################################
@@ -843,24 +967,12 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 		rm -rf $submission_dir/chromosome_list.tsv
 		for contig in $contigs
 		do
-			if [ "$contig_info" != "" ]
+			if [ "$chromosome_list" != "" ] && `grep -q $'\t'$contig$'\t' $chromosome_list`
 			then
-				# if [ `grep $contig$'\t' $contig_info | cut -f4` == "Y" ] || ( [ "$bin_quality" == "HIGH" ] && [ `echo $contigs | wc -w` -eq 1 ] )
-				# then
-				if [ "$assembly_type" == "Metagenome-Assembled Genome (MAG)" ]
-				then
-					sed -i "s|>$contig$|>chromosome_$chrom_num contig=$contig|g" $outdir/bin.tmp.fa
-					if [ `grep $contig$'\t' $contig_info | cut -f4` == "Y" ]
-					then
-						echo -e "chromosome_$chrom_num\t$chrom_num\tCircular-Chromosome" >> $submission_dir/chromosome_list.tsv
-					else
-						echo -e "chromosome_$chrom_num\t$chrom_num\tLinear-Chromosome" >> $submission_dir/chromosome_list.tsv
-					fi
-					chrom_num=`expr $chrom_num + 1`
-				else
-					sed -i "s|>$contig$|>contig_$contig_num contig=$contig|g" $outdir/bin.tmp.fa
-					contig_num=`expr $contig_num + 1`
-				fi
+				sed -i "s|>$contig$|>chromosome_$chrom_num contig=$contig|g" $outdir/bin.tmp.fa
+				chrom_type=`grep $'\t'$contig$'\t' $chromosome_list | cut -f3`
+				echo -e  "chromosome_$chrom_num\t$chrom_num\t$chrom_type" >> $submission_dir/chromosome_list.tsv
+				chrom_num=`expr $chrom_num + 1`
 			else
 				sed -i "s|>$contig$|>contig_$contig_num contig=$contig|g" $outdir/bin.tmp.fa
 				contig_num=`expr $contig_num + 1`
@@ -890,10 +1002,10 @@ stats: |" > $submission_dir/$bin_tolid.yaml
 		then
 			sed -i "s|Sanger RW$|Sanger RW\nchromosome_list: $submission_dir/chromosome_list.tsv|g" $submission_dir/$bin_tolid.yaml
 		fi
-		echo "Submitting curation request for \"$bin_tolid\"."
-		metagenome_curation_request.sh $submission_dir/$bin_tolid.yaml
+		# echo "Submitting curation request for \"$bin_tolid\"."
+		# metagenome_curation_request.sh $submission_dir/$bin_tolid.yaml
 	done
 	echo "Output directory: $mainout"
 fi
 
-rm -rf $outdir/*tmp*
+# rm -rf $outdir/*tmp*

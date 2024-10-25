@@ -203,7 +203,7 @@ do
 		biosample=""
 		tolid=""
 	fi
-	contigs=`grep $'^>' $bin_dir/$bin.fa | cut -d'>' -f2`
+	contigs=`grep $'^>' $bin_dir/$bin.fa | cut -d'>' -f2 | sort -u`
 	for contig in $contigs
 	do
 		if [ "$contig_info" != "" ]

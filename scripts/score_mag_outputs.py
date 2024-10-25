@@ -3,6 +3,7 @@ import argparse
 import os
 import sys
 import pandas as pd
+import numpy as np
 
 ########################
 # Quality Class Weighting
@@ -30,8 +31,8 @@ def format_data(bin_stats):
     bin_data = bin_data[bin_data.Contamination <= 10.0]
     # Rename magscot and dastool outputs so they appear in binning program name
     for refiner in bin_data.refining_program.unique():
-        bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'] = bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'].replace('.*\.raw', "{}_raw".format(refiner), regex=True)
-        bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'] = bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'].replace('.*\.filtered', "{}_filtered".format(refiner), regex=True)
+        bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'] = bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'].replace('.*.raw', "{}_raw".format(refiner), regex=True)
+        bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'] = bin_data.loc[bin_data['refining_program'] == refiner, 'binning_program'].replace('.*.filtered', "{}_filtered".format(refiner), regex=True)
     # Remove any anomalous data
     bin_data = bin_data[(bin_data.contigs > 0)]
     bin_data = bin_data[~bin_data['part'].isin(['all_primary', 'snpt', 'alternate'])]
@@ -46,7 +47,7 @@ def score_bins(bin_data):
     bin_data.loc[bin_data['rrna_23s'] == 'Y', 'mg_score'] += 25
     bin_data.loc[bin_data['rrna_16s'] == 'Y', 'mg_score'] += 25
     bin_data.loc[bin_data['rrna_5s'] == 'Y', 'mg_score'] += 25
-    bin_data.loc[bin_data['unique_trnas'] < 18, 'mg_score'] += 25 * (bin_data.loc[bin_data['unique_trnas'] < 18, 'unique_trnas']/ 18)
+    bin_data.loc[bin_data['unique_trnas'] < 18, 'mg_score'] += np.round(25 * (bin_data.loc[bin_data['unique_trnas'] < 18, 'unique_trnas']/ 18))
     bin_data['score'] = (bin_data['cch_score'] + bin_data['contiguity_score'] + bin_data['mg_score'])/300
     bin_data.loc[bin_data['quality'] == 'MEDIUM', 'score'] *= A
     bin_data.loc[bin_data['quality'] == 'LOW', 'score'] *= B

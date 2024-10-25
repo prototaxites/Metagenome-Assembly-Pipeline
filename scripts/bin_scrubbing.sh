@@ -17,12 +17,14 @@ then
 		-e $outdir/checkm_raw.e \
 		-M50000 \
 		-R 'select[mem>50000] rusage[mem=50000]' \
-			"checkm lineage_wf \
-				-t 16 -x $extension \
-				--tab_table \
-				-f $outdir/checkm.raw/results.tsv \
-				$bindir \
-				$outdir/checkm.raw"
+			"singularity exec -B /lustre,/nfs \
+				$LOCAL_IMAGES/checkm.sif \
+				checkm lineage_wf \
+					-t 16 -x $extension \
+					--tab_table \
+					-f $outdir/checkm.raw/results.tsv \
+					$bindir \
+					$outdir/checkm.raw"
 fi
 # Filter contigs in bins by size and circularity
 ## Keep all contigs >= 1MB
@@ -78,12 +80,15 @@ then
 		-e $outdir/checkm_scrubbed.e \
 		-M50000 \
 		-R 'select[mem>50000] rusage[mem=50000]' \
-			"checkm lineage_wf \
-				-t 16 -x $extension \
-				--tab_table \
-				-f $outdir/checkm.scrubbed/results.tsv \
-				$outdir/output_bins \
-				$outdir/checkm.scrubbed"
+			"singularity exec -B /lustre,/nfs \
+				$LOCAL_IMAGES/checkm.sif \
+					checkm lineage_wf \
+						-t 16 \
+						-x $extension \
+						--tab_table \
+						-f $outdir/checkm.scrubbed/results.tsv \
+						$outdir/output_bins \
+						$outdir/checkm.scrubbed"
 fi
 
 while ! test -d $outdir/checkm.raw || ! test -f $outdir/checkm.raw/results.tsv || ! test -d $outdir/checkm.scrubbed || ! test -f $outdir/checkm.scrubbed/results.tsv

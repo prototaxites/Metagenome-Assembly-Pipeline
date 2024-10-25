@@ -234,12 +234,13 @@ then
 		echo "####  MAGSCOT WRAPPER ($binning_program): Running PROGIGAL ####" >> $logout/mag_pipe_progress.log
 		echo "####  MAGSCOT WRAPPER ($binning_program): Running PRODIGAL ####"
 		### ORF detection with prodigal
-		cat $assembly \
-			| prodigal \
-				-p meta \
-				-a $hmm_dir/prodigal.faa \
-				-d $hmm_dir/prodigal.ffn \
-				-o $hmm_dir/tmpfile
+		singularity exec -B /lustre,/nfs \
+			$LOCAL_IMAGES/prodigal.sif \
+				prodigal \
+					-p meta \
+					-a $hmm_dir/prodigal.faa \
+					-d $hmm_dir/prodigal.ffn \
+					ß-o $hmm_dir/tmpfile
 	fi
 	if ! test -f $hmm_dir/prodigal.faa || [ `head $hmm_dir/prodigal.faa | wc -l` -eq 0 ]
 	then
@@ -253,18 +254,22 @@ then
 		echo "####  MAGSCOT WRAPPER ($binning_program): Running HMMSEARCH ####" >> $logout/mag_pipe_progress.log
 		echo "####  MAGSCOT WRAPPER ($binning_program): Running HMMSEARCH ####"
 		### annotation of protein sequences using HMMer and GTDBtk r207 marker genes
-		hmmsearch \
-			-o $hmm_dir/hmm.tigr.out \
-			--tblout $hmm_dir/hmm.tigr.hit.out \
-			--noali --notextw --cut_nc --cpu $threads \
-			$GTDBTK_DB/hmm/gtdbtk_rel207_tigrfam.hmm \
-			$hmm_dir/prodigal.faa
-		hmmsearch \
-			-o $hmm_dir/hmm.pfam.out \
-			--tblout $hmm_dir/hmm.pfam.hit.out \
-			--noali --notextw --cut_nc --cpu $threads \
-			$GTDBTK_DB/hmm/gtdbtk_rel207_Pfam-A.hmm \
-			$hmm_dir/prodigal.faa
+		singularity exec -B /lustre,/nfs \
+			$LOCAL_IMAGES/hmmer.sif \
+				hmmsearch \
+					-o $hmm_dir/hmm.tigr.out \
+					--tblout $hmm_dir/hmm.tigr.hit.out \
+					--noali --notextw --cut_nc --cpu $threads \
+					$GTDBTK_DB/hmm/gtdbtk_rel207_tigrfam.hmm \
+					$hmm_dir/prodigal.faa
+		singularity exec -B /lustre,/nfs \
+			$LOCAL_IMAGES/hmmer.sif \
+				hmmsearch \
+					-o $hmm_dir/hmm.pfam.out \
+					--tblout $hmm_dir/hmm.pfam.hit.out \
+					--noali --notextw --cut_nc --cpu $threads \
+					$GTDBTK_DB/hmm/gtdbtk_rel207_Pfam-A.hmm \
+					$hmm_dir/prodigal.faa
 	fi
 	cat $hmm_dir/hmm.tigr.hit.out \
 		| grep -v "^#" \
@@ -317,7 +322,7 @@ then
 	cd $outdir
 	singularity run \
 		--bind /lustre:/lustre \
-		$LOCAL_IMAGES/magscot.1.0.0.sif \
+		$LOCAL_IMAGES/magscot.sif \
 			-i $outdir/contig_to_bin.tsv \
 			--hmm $hmm_dir/input.hmm
 	if ! test -f $outdir/MAGScoT.refined.contig_to_bin.out || [ `head $outdir/MAGScoT.refined.contig_to_bin.out | wc -l` -eq 0 ]

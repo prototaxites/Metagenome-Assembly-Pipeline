@@ -199,7 +199,7 @@ then
 fi
 if [ "$GTDBTK_DB" == "" ]
 then
-	export GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release207_v2
+	export GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release214
 fi
 
 if [ "$assembly" == "" ]
@@ -257,7 +257,7 @@ then
 				-2 $hic2 \
 				-a $assembly \
 				-o $outdir \
-				--threads $threads
+				-t $threads
 	if ! test -d $outdir/final_bin || [ `ls $outdir/final_bin | wc -l` -eq 0 ]
 	then
 		echo -e "$prefix\tmetator" >> $ERROR_OUT
