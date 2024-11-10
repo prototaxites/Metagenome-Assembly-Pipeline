@@ -9,6 +9,8 @@ via Singularity images stored locally.
 ```bash
 export PATH=$PATH:/software/team311/ng13/local/bin
 export LOCAL_IMAGES=/software/team311/ng13/local/images
+
+module load samtools/1.20--h50ea8bc_0
 ```
 
 We'll also set some basic variables (largely ToL-related) including our output directory...
@@ -62,7 +64,7 @@ done
 
 ### 2. Metagenome assembly
 
-The pipeline should be compatible with HiCanu, MetaFlye, Hifiasm-Meta, and metaMDBG. \
+The pipeline should be compatible with MetaFlye, Hifiasm-Meta, and metaMDBG. \
 In some basic benchmarking, metaMDBG consistently outperformed the other tools so we'll \
 stick with that for now...
 
@@ -89,7 +91,10 @@ bsub -n12 -q long -R"span[hosts=1]" \
 			--in-hifi $outdir/$specimen.pacbio.fa"
 ```
 
-Output = `$outdir/contigs.fasta.gz`
+Output...
+```
+$outdir/contigs.fasta.gz
+```
 
 
 ### 3. Run the pipeline
@@ -123,7 +128,10 @@ map_runner.sh \
 NOTE: `bin3c` requires HiC data.
 
 
-Output = `/lustre/scratch124/tol/projects/$project/data/$tolid_group/$species/working/$tolid.$assembler.$date/mags/all/bin_stats.csv`
+Output..
+```bash
+/lustre/scratch124/tol/projects/$project/data/$tolid_group/$species/working/$tolid.$assembler.$date/mags/all/bin_stats.csv
+```
 
 To check if all of the outputs were generated...
 ```bash
@@ -131,6 +139,13 @@ cut -d',' -f1-3 /lustre/scratch124/tol/projects/$project/data/$tolid_group/$spec
 	| sort -u
 ```
 
+
+### 3. Score the output
+```
+score_mag_outputs.py \
+	-p $outdir/final \
+	/lustre/scratch124/tol/projects/$project/data/$tolid_group/$species/working/$tolid.$assembler.$date/mags/all/bin_stats.csv
+```
 
 
 
