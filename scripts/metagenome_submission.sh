@@ -33,7 +33,10 @@ OPTIONS:\n\
     -c | --biosample_configs     BioSample config file\n\
 	-C | --contig_info           Contig info TSV in format \"contig\tcontig_length\tcontig_depth\tcircular\"\n\
 	-l | --chromosome_list		 Contig chromosome annotations in format \"bin\tcontig\tchromosome_type\"\n\
+	-S | --submit				 Submit curation requests for MAGS rather than just creating submission directories\"\n\
     -o | --outdir                Output directory\n\
+	-O | --cr_outdir			 Curation request output directory [ <tol_id>.metagenome.<yyyymmdd>]\n\
+	-F | --force				 Overwrite final outputs for submission\n\
     -h | --help                  Print help message\n\n\
 \n\n\
 AUTHOR:\n\
@@ -43,7 +46,7 @@ if ! `beginswith "-" $1`
 then
 	command=$1
 	shift
-	if [ "$command" != "config_file" ] && [ "$command" != "check" ] && [ "$command" != "biosample_prep" ] && [ "$command" != "spreadsheet_update" ] && [ "$command" != "curation_request" ] && [ "$command" != "generate_chromosome_list" ]
+	if [ "$command" != "config_file" ] && [ "$command" != "check" ] && [ "$command" != "biosample_prep" ] && [ "$command" != "spreadsheet_update" ] && [ "$command" != "curation_request" ] && [ "$command" != "generate_chromosome_list" ] && [ "$command" != "submit_cr" ]
 	then
 		echo -e "#### UNKNOWN COMMAND: $command ####\n\n$usage"
 		exit 1
@@ -52,13 +55,14 @@ else
 	echo -e $usage
 fi
 
-outdir="./metagenome_pipeline"
 biosample_configs="./metagenome_pipeline/biosample_configs.txt"
 primary_taxon=""
 threads=1
 refining_program="dastool"
 metagenome_taxids=/lustre/scratch124/tol/projects/darwin/users/ng13/organismal_metagenome_taxids.tsv
 outdir="."
+submit="false"
+force="false"
 while [ "$1" != "" ]
 do
 	case $1 in
@@ -198,6 +202,12 @@ do
 				outdir=$1
 				mkdir -p $outdir
 			fi;;
+		-O | --cr_outdir)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				cr_outdir=$1
+			fi;;
 		-l | --chromosome_list)
 			if ! `beginswith "-" $2`
 			then
@@ -209,6 +219,12 @@ do
 					exit 1
 				fi
 			fi;;
+		-S | --submit)
+			shift
+			submit="true";;
+		-F | --force)
+			shift
+			force="true";;
 		-h | --help)
 			echo -e $usage
 			exit 0;;
@@ -821,23 +837,26 @@ then
 	done
 	if test -f $outdir/circ.tmp.list && [ `cat $outdir/circ.tmp.list | wc -l` -gt 0 ]
 	then
-		assembly_dir=`dirname $assembly`
-		if ! test -f $assembly_dir/contigs.fasta
+		if ! test -d $outdir/genomad_output || ! test -d $outdir/genomad_output/circular_contigs_summary || ! test -f $outdir/genomad_output/circular_contigs_summary/circular_contigs_plasmid_summary.tsv || [ "$force" == "true" ]
 		then
-			gunzip -c $assembly \
-				> $assembly_dir/contigs.fasta
+			assembly_dir=`dirname $assembly`
+			if ! test -f $assembly_dir/contigs.fasta
+			then
+				gunzip -c $assembly \
+					> $assembly_dir/contigs.fasta
+			fi
+			select_fasta_by_list.pl \
+				-i $assembly_dir/contigs.fasta \
+				-l $outdir/circ.tmp.list \
+				-o $outdir/circular_contigs.fa
+			fastalength $outdir/circular_contigs.fa \
+				> $outdir/circular_contigs.len
+			singularity run -B /lustre,/nfs \
+				$LOCAL_IMAGES/genomad.sif end-to-end \
+					$outdir/circular_contigs.fa \
+					$outdir/genomad_output \
+					$GENOMAD_DB
 		fi
-		select_fasta_by_list.pl \
-			-i $assembly_dir/contigs.fasta \
-			-l $outdir/circ.tmp.list \
-			-o $outdir/circular_contigs.fa
-		fastalength $outdir/circular_contigs.fa \
-			> $outdir/circular_contigs.len
-		singularity run -B /lustre,/nfs \
-			$LOCAL_IMAGES/genomad.sif end-to-end \
-				$outdir/circular_contigs.fa \
-				$outdir/genomad_output \
-				$GENOMAD_DB
 	fi
 	rm -rf $outdir/chromosome_list.tsv
 	if test -f $outdir/circ.tmp.list
@@ -847,7 +866,7 @@ then
 			len=`grep $' '$contig$'$' $outdir/circular_contigs.len | cut -d' ' -f1`
 			mag=`grep $'^'$contig$'\t' $directory/$binning_program/contigs2bin.tsv | cut -f2`
 			plasmid=`grep $contig$'\t' $outdir/genomad_output/circular_contigs_summary/circular_contigs_plasmid_summary.tsv \
-				| awk -F'\t' '{if($6 >= 95){print "true"}else{print "false"}}'`
+				| awk -F'\t' '{if($6 >= .95){print "true"}else{print "false"}}'`
 			if [ "$plasmid" == "true" ]
 			then
 				echo -e "$mag\t$contig\tCircular-Plasmid" >> $outdir/chromosome_list.tsv
@@ -889,26 +908,38 @@ then
 		outproject=`echo $project | tr '[a-z]' '[A-Z]'`
 	fi
 	# Primary metagenome
-	current_day=`date +%Y%m%d`
-	mainout=/lustre/scratch124/tol/projects/$project/data/$group/$species/assembly/draft
-	filesout=$mainout/$tol_id.metagenome.$current_day
-	mkdir -p $filesout
-	if [ `echo $assembly | awk -F[.] '{print $NF}'` != "gz" ]
+	if [ "$cr_outdir" == "" ]
 	then
-		if ! test -f $filesout/$tol_id.metagenome.fa.gz
+		current_day=`date +%Y%m%d`
+		cr_outdir=/lustre/scratch124/tol/projects/$project/data/$group/$species/assembly/draft
+	fi
+	# if [ "$force" == "true" ]
+	# then
+	# 	rm -rf $cr_outdir
+	# fi
+	mainout=/lustre/scratch124/tol/projects/$project/data/$group/$species/assembly/draft
+	filesout=$cr_outdir/$tol_id.metagenome
+	mkdir -p $filesout
+	echo "Storing final output in $cr_outdir"
+	if ! test -f $filesout/$tol_id.metagenome.fa.gz \
+		|| ! test -f $filesout/$tol_id.metagenome.yaml \
+		|| ! `grep -q "largest" $filesout/$tol_id.metagenome.yaml` \
+		|| [ "$force" == "true" ]
+	then
+		echo "Prepping primary metagenome."
+		if [ `echo $assembly | awk -F[.] '{print $NF}'` != "gz" ]
 		then
 			gzip -c $assembly \
 				> $filesout/$tol_id.metagenome.fa.gz
+			ln -fs $assembly $outdir/tmp.fa
+		else
+			cp $assembly $filesout/$tol_id.metagenome.fa.gz
+			gunzip -c $filesout/$tol_id.metagenome.fa.gz \
+				> $outdir/tmp.fa
 		fi
-		ln -fs $assembly $outdir/tmp.fa
-	else
-		cp $assembly $filesout/$tol_id.metagenome.fa.gz
-		gunzip -c $filesout/$tol_id.metagenome.fa.gz \
-			> $outdir/tmp.fa
-	fi
 	#################################################
 	# YAML for Curation Request: Primary Metagenome #
-	echo -e \
+		echo -e \
 "---
 species: $primary_taxon
 specimen: $tol_id.metagenome
@@ -922,13 +953,14 @@ jira_queue: DS
 pipeline:
   - $asm_soft
 stats: |" > $filesout/$tol_id.metagenome.yaml
-	singularity exec -B /lustre:/lustre \
-		/software/tola/images/asmstats.sif \
-			asmstats $outdir/tmp.fa \
-				| sed "s|^|  |g" | tail -n +2 \
-				>> $filesout/$tol_id.metagenome.yaml
-	echo "Submitting curation request for \"$tol_id.metagenome\"."
-	metagenome_curation_request.sh $filesout/$tol_id.metagenome.yaml
+		singularity exec -B /lustre:/lustre \
+			/software/tola/images/asmstats.sif \
+				asmstats $outdir/tmp.fa \
+					| sed "s|^|  |g" | tail -n +2 \
+					>> $filesout/$tol_id.metagenome.yaml
+	fi
+	# echo "Submitting curation request for \"$tol_id.metagenome\"."
+	# metagenome_curation_request.sh $filesout/$tol_id.metagenome.yaml
 	# ################################################
 	# YAML for Curation Request: Binned Assemblies
 	bin_field=`head -1  $bin_data | sed "s|,|\n|g" | grep -n $'^bin_id$' | cut -d':' -f1`
@@ -938,6 +970,7 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 	bins=`tail -n +2 $bin_data | awk -F',' -v N=$bin_field '{print $N}'`
 	for bin in $bins
 	do
+		echo "Prepping $bin"
 		rm -rf $outdir/bin.tmp.fa
 		bin_tolid=`grep $'^'$bin"," $biosample_accessions | cut -d',' -f2`
 		bin_file=`ls $bindir/output_bins | grep $bin.$'fa.*'`
@@ -946,40 +979,45 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 		bin_drep=`grep ",$bin," $bin_data | awk -F',' -v N=$drep_field '{print $N}'`
 		assembly_type="binned metagenome"
 		bin_tolid_base=`echo $bin_tolid | cut -d'.' -f2`
-		submission_dir="$mainout/${bin_tolid}.$current_day"
+		submission_dir="$cr_outdir/${bin_tolid}"
 		mkdir -p $submission_dir
-		if [ "$bin_quality" == "HIGH" ] && [ "$bin_drep" == "PASSED" ]
+		if ! test -f $submission_dir/$bin_tolid.fa.gz \
+			|| ! test -f $submission_dir/$bin_tolid.yaml \
+			|| ! `grep -q "largest" $submission_dir/$bin_tolid.yaml` \
+			|| [ "$force" == "true" ]
 		then
-			assembly_type="Metagenome-Assembled Genome (MAG)"
-		fi
-		if [ `echo $bin_file | awk -F'.' '{print $NF}'` == "gz" ]
-		then
-			# cp $bindir/output_bins/$bin_file $submission_dir/$bin_tolid.fa.gz
-			gunzip -c $bindir/output_bins/$bin_file \
-				> $outdir/bin.tmp.fa
-		else
-			# gzip -c $bindir/output_bins/$bin_file > $submission_dir/$bin_tolid.fa.gz
-			cp $bindir/output_bins/$bin_file $outdir/bin.tmp.fa
-		fi
-		contigs=`grep $'^>' $outdir/bin.tmp.fa | cut -d'>' -f2`
-		contig_num=1
-		chrom_num=1
-		rm -rf $submission_dir/chromosome_list.tsv
-		for contig in $contigs
-		do
-			if [ "$chromosome_list" != "" ] && `grep -q $'\t'$contig$'\t' $chromosome_list`
+			if [ "$bin_quality" == "HIGH" ] && [ "$bin_drep" == "PASSED" ]
 			then
-				sed -i "s|>$contig$|>chromosome_$chrom_num contig=$contig|g" $outdir/bin.tmp.fa
-				chrom_type=`grep $'\t'$contig$'\t' $chromosome_list | cut -f3`
-				echo -e  "chromosome_$chrom_num\t$chrom_num\t$chrom_type" >> $submission_dir/chromosome_list.tsv
-				chrom_num=`expr $chrom_num + 1`
-			else
-				sed -i "s|>$contig$|>contig_$contig_num contig=$contig|g" $outdir/bin.tmp.fa
-				contig_num=`expr $contig_num + 1`
+				assembly_type="Metagenome-Assembled Genome (MAG)"
 			fi
-		done
-		gzip -c $outdir/bin.tmp.fa > $submission_dir/$bin_tolid.fa.gz
-		echo -e \
+			if [ `echo $bin_file | awk -F'.' '{print $NF}'` == "gz" ]
+			then
+				# cp $bindir/output_bins/$bin_file $submission_dir/$bin_tolid.fa.gz
+				gunzip -c $bindir/output_bins/$bin_file \
+					> $outdir/bin.tmp.fa
+			else
+				# gzip -c $bindir/output_bins/$bin_file > $submission_dir/$bin_tolid.fa.gz
+				cp $bindir/output_bins/$bin_file $outdir/bin.tmp.fa
+			fi
+			contigs=`grep $'^>' $outdir/bin.tmp.fa | cut -d'>' -f2`
+			contig_num=1
+			chrom_num=1
+			rm -rf $submission_dir/chromosome_list.tsv
+			for contig in $contigs
+			do
+				if [ "$chromosome_list" != "" ] && `grep -q $'\t'$contig$'\t' $chromosome_list`
+				then
+					sed -i "s|>$contig$|>chromosome_$chrom_num contig=$contig|g" $outdir/bin.tmp.fa
+					chrom_type=`grep $'\t'$contig$'\t' $chromosome_list | cut -f3`
+					echo -e  "chromosome_$chrom_num\t$chrom_num\t$chrom_type" >> $submission_dir/chromosome_list.tsv
+					chrom_num=`expr $chrom_num + 1`
+				else
+					sed -i "s|>$contig$|>contig_$contig_num contig=$contig|g" $outdir/bin.tmp.fa
+					contig_num=`expr $contig_num + 1`
+				fi
+			done
+			gzip -c $outdir/bin.tmp.fa > $submission_dir/$bin_tolid.fa.gz
+			echo -e \
 "---
 species: $bin_species
 specimen: $bin_tolid
@@ -993,19 +1031,53 @@ jira_queue: DS
 pipeline:
   - $asm_soft
 stats: |" > $submission_dir/$bin_tolid.yaml
-		singularity exec -B /lustre:/lustre \
-			/software/tola/images/asmstats.sif \
-				asmstats $outdir/bin.tmp.fa \
-					| sed "s|^|  |g" | tail -n +2 \
-					>> $submission_dir/$bin_tolid.yaml
-		if test -f $submission_dir/chromosome_list.tsv
-		then
-			sed -i "s|Sanger RW$|Sanger RW\nchromosome_list: $submission_dir/chromosome_list.tsv|g" $submission_dir/$bin_tolid.yaml
+			singularity exec -B /lustre:/lustre \
+				/software/tola/images/asmstats.sif \
+					asmstats $outdir/bin.tmp.fa \
+						| sed "s|^|  |g" | tail -n +2 \
+						>> $submission_dir/$bin_tolid.yaml
+			if test -f $submission_dir/chromosome_list.tsv
+			then
+				sed -i "s|Sanger RW$|Sanger RW\nchromosome_list: $submission_dir/chromosome_list.tsv|g" $submission_dir/$bin_tolid.yaml
+			fi
 		fi
-		# echo "Submitting curation request for \"$bin_tolid\"."
-		# metagenome_curation_request.sh $submission_dir/$bin_tolid.yaml
 	done
-	echo "Output directory: $mainout"
+	echo "Output directory: $cr_outdir"
+	if [ "$submit" == "true" ]
+	then
+		for magdir in $cr_outdir/*
+		do
+			bin_tolid=`basename $magdir`
+			echo "Submitting curation request for \"$bin_tolid\"."
+			if test -f $magdir/$bin_tolid.yaml
+			then
+				metagenome_curation_request.sh $magdir/$bin_tolid.yaml
+			else
+				echo "ERROR: Could not find yaml $magdir/$bin_tolid.yaml"
+			fi
+		done
+	fi		
 fi
 
+if [ "$command" == "submit_cr" ]
+then
+	if [ "$cr_outdir" == "" ] || ! test -d $cr_outdir
+	then
+		echo "Could not find curation request directory: $cr_outdir"
+		exit 1
+	else
+		for magdir in $cr_outdir/*
+		do
+			bin_tolid=`basename $magdir`
+			echo "Submitting curation request for \"$bin_tolid\"."
+			if test -f $magdir/$bin_tolid.yaml
+			then
+				# echo "$bin_tolid"
+				metagenome_curation_request.sh $magdir/$bin_tolid.yaml
+			else
+				echo "ERROR: Could not find yaml $magdir/$bin_tolid.yaml"
+			fi
+		done
+	fi
+fi
 # rm -rf $outdir/*tmp*

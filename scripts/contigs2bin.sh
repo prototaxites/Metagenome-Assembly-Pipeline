@@ -4,13 +4,13 @@ bindir=$1
 outfile=$2
 extension=$3
 
-rm -rf $outfile
-for file in $bindir/*.$extension
-do
-	bin=`basename $file .$extension`
-	contigs=`grep $'^>' $file | cut -d'>' -f2`
-	for contig in $contigs
-	do
-		echo -e "$contig\t$bin" >> $outfile
-	done
-done
+awk -v ext=$extension \
+        'BEGIN { OFS = "\t" }
+        BEGINFILE {
+                cmd=sprintf("basename %s .%s", FILENAME, ext)
+                cmd | getline bin
+        }
+        /^>/ {
+                sub(/>/, "", $1)
+                print $1,bin
+        }' $bindir/*.$extension > $outfile
