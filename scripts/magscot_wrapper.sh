@@ -333,8 +333,9 @@ then
 		exit 1
 	fi
 	mkdir -p $outdir/output_bins
+	awk 'BEGIN {OFS="\t"} NR > 1 {print $2,$1}' $outdir/MAGScoT.refined.contig_to_bin.out > $outdir/MAGScot.refined.contig_to_bin.out.proc
 	contigs2bintofasta.sh \
-		<(awk 'BEGIN {OFS="\t"} {print $2,$1}' $outdir/MAGScoT.refined.contig_to_bin.out) \
+		$outdir/MAGScot.refined.contig_to_bin.out.proc \
 		$assembly \
 		$outdir/output_bins/
 fi
