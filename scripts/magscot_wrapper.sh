@@ -333,16 +333,10 @@ then
 		exit 1
 	fi
 	mkdir -p $outdir/output_bins
-	bins=`tail -n +2 $outdir/MAGScoT.refined.contig_to_bin.out | cut -f1 | sort -u`
-	for bin in $bins
-	do
-		grep $'^'$bin$'\t' $outdir/MAGScoT.refined.contig_to_bin.out \
-			| cut -f2 > $outdir/tmp.list
-		select_fasta_by_list.pl \
-			-l $outdir/tmp.list \
-			-i $assembly \
-			-o $outdir/output_bins/$bin.fa
-	done
+	contigs2bintofasta.sh \
+		<(awk 'BEGIN {OFS="\t"} {print $2,$1}' $outdir/MAGScoT.refined.contig_to_bin.out) \
+		$assembly \
+		$outdir/output_bins/
 fi
 contigs2bin.sh \
 	$outdir/output_bins \
