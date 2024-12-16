@@ -322,7 +322,7 @@ then
 	cd $outdir
 	singularity run \
 		--bind /lustre:/lustre \
-		$LOCAL_IMAGES/magscot.sif \
+		$LOCAL_IMAGES/magscot.sif MagScoT.R \
 			-i $outdir/contig_to_bin.tsv \
 			--hmm $hmm_dir/input.hmm
 	if ! test -f $outdir/MAGScoT.refined.contig_to_bin.out || [ `head $outdir/MAGScoT.refined.contig_to_bin.out | wc -l` -eq 0 ]
