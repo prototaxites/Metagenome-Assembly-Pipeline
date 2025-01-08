@@ -114,6 +114,7 @@ then
 	exit 1
 fi
 
+
 if [ "$directory" == "" ]
 then
 	echo -e "ERROR: Binning output directory required."
@@ -135,6 +136,12 @@ then
 		echo -e "ERROR: Directory containing binned MAGs could not be inferred and was not provided."
 		exit 1
 	fi
+fi
+
+if [ `echo $assembly | awk -F'.' '{print $NF}'` == "gz" ]
+then
+	gunzip -c $assembly > $directory/assembly.tmp.fa
+	assembly=$directory/assembly.tmp.fa
 fi
 
 # assembly=/lustre/scratch124/tol/projects/darwin/users/ng13/asg/data/protists/Heterometopus_palaeformis/working/piHetPala1.meta-mdbg.20230726

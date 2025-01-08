@@ -4,7 +4,7 @@ GTDBTK_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/gtdb-tk/release214
 NCBI_TAXDUMP="$GTDBTK_DB/`ls $GTDBTK_DB | grep 'ncbi_taxdump' | sort -r | head -1`"
 group_key=/lustre/scratch124/tol/projects/darwin/users/ng13/group_key.tsv
 metagenome_taxids=/lustre/scratch124/tol/projects/darwin/users/ng13/organismal_metagenome_taxids.tsv
-
+LOCAL_IMAGES=/software/team311/ng13/local/images
 
 usage="SYNOPSIS: metagenome_submission.sh <command> [OPTIONS]\n\
 DESCRIPTION: Takes input information to prep and send metagenome curation requests.\n\
@@ -36,6 +36,8 @@ OPTIONS:\n\
 	-S | --submit				 Submit curation requests for MAGS rather than just creating submission directories\"\n\
     -o | --outdir                Output directory\n\
 	-O | --cr_outdir			 Curation request output directory [ <tol_id>.metagenome.<yyyymmdd>]\n\
+	-V | --metagenome_version	 Version of the metagenome\n\
+	-K | --btk_dir				 BTK directory\n\
 	-F | --force				 Overwrite final outputs for submission\n\
     -h | --help                  Print help message\n\n\
 \n\n\
@@ -46,7 +48,7 @@ if ! `beginswith "-" $1`
 then
 	command=$1
 	shift
-	if [ "$command" != "config_file" ] && [ "$command" != "check" ] && [ "$command" != "biosample_prep" ] && [ "$command" != "spreadsheet_update" ] && [ "$command" != "curation_request" ] && [ "$command" != "generate_chromosome_list" ] && [ "$command" != "submit_cr" ]
+	if [ "$command" != "config_file" ] && [ "$command" != "check" ] && [ "$command" != "biosample_prep" ] && [ "$command" != "spreadsheet_update" ] && [ "$command" != "curation_request" ] && [ "$command" != "generate_chromosome_list" ] && [ "$command" != "submit_cr" ] && [ "$command" != "create_btk" ]
 	then
 		echo -e "#### UNKNOWN COMMAND: $command ####\n\n$usage"
 		exit 1
@@ -63,6 +65,7 @@ metagenome_taxids=/lustre/scratch124/tol/projects/darwin/users/ng13/organismal_m
 outdir="."
 submit="false"
 force="false"
+metagenome_version=1
 while [ "$1" != "" ]
 do
 	case $1 in
@@ -167,6 +170,12 @@ do
 				shift
 				group=$1
 			fi;;
+		-V | --metagenome_version)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				metagenome_version=$1
+			fi;;
 		-s | --species)
 			if ! `beginswith "-" $2`
 			then
@@ -195,6 +204,17 @@ do
 					exit 1
 				fi
 			fi;;
+		-K | --btk_dir)
+			if ! `beginswith "-" $2`
+			then
+				shift
+				btk_dir=$1
+				if ! test -d $btk_dir
+				then
+					echo -e "#### ERROR: Could not find btk directory $btk_dir. ####\n\n$usage"
+					exit 1
+				fi
+			fi;;	
 		-o | --outdir)
 			if ! `beginswith "-" $2`
 			then
@@ -918,6 +938,7 @@ then
 	# 	rm -rf $cr_outdir
 	# fi
 	mainout=/lustre/scratch124/tol/projects/$project/data/$group/$species/assembly/draft
+	pb_read_dir=/lustre/scratch124/tol/projects/$project/data/$group/$species/genomic_data/$tol_id/pacbio
 	filesout=$cr_outdir/$tol_id.metagenome
 	mkdir -p $filesout
 	echo "Storing final output in $cr_outdir"
@@ -949,6 +970,7 @@ data_location: Sanger RW
 cobiont_status: cobiont
 primary: $filesout/$tol_id.metagenome.fa.gz
 assembly_type: primary metagenome
+pacbio_read_dir: $pb_read_dir
 jira_queue: DS
 pipeline:
   - $asm_soft
@@ -1027,6 +1049,7 @@ data_location: Sanger RW
 cobiont_status: cobiont
 primary: $submission_dir/$bin_tolid.fa.gz
 assembly_type: $assembly_type
+pacbio_read_dir: $pb_read_dir
 jira_queue: DS
 pipeline:
   - $asm_soft
@@ -1081,3 +1104,73 @@ then
 	fi
 fi
 # rm -rf $outdir/*tmp*
+
+if [ "$command" == "create_btk" ]
+then
+	if ! test -f $outdir/bin_data/other_bin_info.csv || [ `cat $outdir/bin_data/other_bin_info.csv | wc -l` -eq 0 ] || [ "$force" == "true" ]
+	then
+		echo $assembly
+		echo $outdir
+		bin_data2csvs.sh \
+			-a $assembly \
+			-d $bindir \
+			-R $bindir/output_bins \
+			-b $bin_data \
+			-x $biosample_accessions \
+			-C $contig_info \
+			-o $outdir/bin_data
+	fi
+	if [ "$btk_dir" != "" ]
+	then
+		mkdir -p $outdir/btk_dataset
+		cp -R $btk_dir/* $outdir/btk_dataset
+		singularity exec -B /lustre,/nfs \
+			$LOCAL_IMAGES/blobtoolkit.sif \
+				blobtools add \
+					--text $outdir/bin_data/other_bin_info.csv \
+					--text-delimiter ',' \
+					--text-header \
+					--replace \
+					$outdir/btk_dataset
+		files=`ls $outdir/bin_data/*.csv \
+			| grep -v 'ncbi' \
+			| grep -v 'gtdb' \
+			| grep -v "other_bin_info"`
+		for file in $files
+		do
+			singularity exec -B /lustre,/nfs \
+				$LOCAL_IMAGES/blobtoolkit.sif \
+					blobtools add \
+						--text $file \
+						--text-delimiter ',' \
+						--text-header \
+						--replace \
+						$outdir/btk_dataset
+		done
+		groups="domain phylum class order family genus species"
+		dbs="gtdb ncbi"
+		for db in $dbs
+		do
+			for group in $groups
+			do
+				singularity exec -B /lustre,/nfs \
+					$LOCAL_IMAGES/blobtoolkit.sif \
+						blobtools add \
+							--text $outdir/bin_data/${db}_$group.csv \
+							--text-delimiter ',' \
+							--text-header \
+							--replace \
+							$outdir/btk_dataset
+			done
+		done
+		singularity exec -B /lustre,/nfs \
+			$LOCAL_IMAGES/blobtoolkit.sif \
+				blobtools create \
+					$outdir/btk_dataset
+		cp -R $outdir/btk_dataset \
+			/lustre/scratch123/tol/share/grit-btk-prod/blobplots/$specimen.metagenome.$metagenome_version
+		curl -s 'https://grit-btk-api.tol.sanger.ac.uk/api/v1/search/reload/testkey%20npm%20start'
+	fi
+fi
+	
+	
