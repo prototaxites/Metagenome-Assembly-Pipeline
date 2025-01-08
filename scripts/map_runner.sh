@@ -673,7 +673,7 @@ do
 			prefix_input=$prefix.$assembler.$part
 			mem=1000
 			# rm -rf $main_dir/mags/$part/complete
-			bsub -n16 -q long -R"span[hosts=1]" \
+			bsub -n16 -q oversubscribed -R"span[hosts=1]" \
 				-o $main_dir/mags/$part/logs/metagenome_assembly_pipeline.%J.o \
 				-e $main_dir/mags/$part/logs/metagenome_assembly_pipeline.%J.e \
 				-M$mem \
