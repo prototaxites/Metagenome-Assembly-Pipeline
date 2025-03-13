@@ -338,6 +338,12 @@ You may need to queue this command as it will run [geNomad](https://github.com/a
 
 The output from this command with be a file of circular contig annotations, `chromosome_list.tsv`.
 
+_NOTE: This script attempts to identify all plasmids in the set of circular chromosomes._ 
+_Remaining circular contigs ≥ 500 kbp and single linear contigs (from bins with only 1 contigs)_
+_are labelled chromosomes._
+
+_There may be no `chromosome_list.tsv` if none of these conditions are met._
+
 
 #### E. GRIT Ticket creation
 While metagenomic assembly objects do not undergo any of the standard curation steps a 
@@ -361,24 +367,95 @@ metagenome_submission.sh spreadsheet_update \
 This will create two csv's.
  - `primary.spreadsheet_update.csv` : The info from this file can be copy and pasted into the **Primary Metagenome Submission** tab.
  - `bin_data.spreadsheet_update.csv` : The info from this file can be copy and pasted into the **Binned Metagenome Submission** tab.
- 
-Before the data can be successfully submitted to ENA, a metagenome BioProject will 
-need to be created. Currently, Shane is the only one who can do this so ask him to create 
-this before putting in a ticket request.
 
-When ready, we can create 'Curation Request' tickets for all the samples by running the 
-following...
+If the script, `metagenome_submission.sh generate_chromosome_list` has successfully completed, 
+we can put the data in in the draft directory and prep the relevant submission files.
 
 ```
+chrlist_arg=""
+if test -f $outdir/chromosome_list.tsv
+then
+	chrlist_arg="-l $outdir/chromosome_list.tsv"
+fi
+date=`date +%Y%m%d`
 metagenome_submission.sh curation_request \
 	-B $binning_program \
 	-d $mag_dir \
 	-c $outdir/biosample_configs.txt \
 	-b $outdir/output_data.csv \
-	-x $outdir/${specimen}_biosamples.csv \
-	-l $outdir/chromosome_list.tsv
+	-x $outdir/${tolid}_biosamples.csv \
+	-O $dir/assembly/draft/$tolid.metagenome.$date \
+	$chrlist_arg
 ```
 
-Each metagenome object will get its own subdirectory in the assembly draft directory for 
-that sample (`$dir/assembly/draft`).
+This will create a directory for each binned assembly and the primary assembly in 
+the directory `$dir/assembly/draft/$tolid.metagenome.$date`. Each directory contains the 
+fasta, submission YAML, and chromosome list file (if relevant).
 
+
+Before the data can be successfully submitted to ENA, a metagenome BioProject will 
+need to be created and the raw data accessioned. Currently, Shane is the 
+only one who can do this so ask him to create this before putting in a ticket request.
+
+If everything is ready, we can put in our curation requests of which one will be generated 
+for each object associated with our metagenome.  
+
+First, set up your environment to work with the submission script if you haven't already.
+```
+. /software/tola/installs/perl5/perlbrew/etc/bashrc
+export PATH=/software/tola/installs/perl5/perlbrew/perls/perl-5.32.0/bin:$PATH
+```
+
+Now we can run the script...
+```
+ls $dir/assembly/draft/$tolid.metagenome.$date/*/*.yaml \
+	| /nfs/users/nfs_s/sm15/dev/tol-track/scripts/tol-submit_yaml_to_grit
+```
+
+#### F. Genome Note Objects
+The goal for all ASG (and presumably future DToL) Genome Notes is to include all relevant
+assembly information for not only the target (host) but any assemble-able genomes associated 
+with that sample.
+
+For the metagenomes, this requires a public BTK dataset hosted [here](https://metagenomes.genomehubs.org/view/), 
+a table containing bin metadata, and, for metagenomes with ≥ 15 associated bins, a 
+cladogram based on TaxIDs.
+
+Once we have accessions for each of our bins and primary assembly as well as a BTK dataset
+associated with our primary assembly, we can update the BTK dataset as well as the bin 
+metadata (`$outdir/bin_data.full.csv`) generated previously.
+
+```
+assembly_dir=`dirname $outdir` # Assuming the primary assembly is in the parent directory
+btk_dataset=$assembly_dir/asg_cobiont/btk_dataset # Assuming this is where our BTK dataset directory is
+
+metagenome_submission.sh create_btk \
+	-B $binning_program \
+	-d $mag_dir \
+	-c $outdir/biosample_configs.txt \
+	-b $outdir/bin_data.full.csv \
+	-x $outdir/${tolid}_biosamples.csv \
+	-O $dir/assembly/draft/$tolid.metagenome.$date \
+	-K $btk_dataset
+```
+Copy the output to our primary assembly directory.
+```
+cp $outdir/bindata.updated.csv \
+	$dir/assembly/draft/$tolid.metagenome.$date/$tolid.metagenome/bin_data.csv
+cp -r $outdir/btk_dataset \
+	$dir/assembly/draft/$tolid.metagenome.$date/$tolid.metagenome/
+```
+ 
+Create the cladogram if ≥ 15 bins:
+```
+create_metagenome_phylogeny.taxid.R \
+	-m $dir/assembly/draft/$tolid.metagenome.$date/$tolid.metagenome/bin_data.csv \
+	-o $dir/assembly/draft/$tolid.metagenome.$date/$tolid.metagenome/ncbi_taxid_tree
+```
+
+Finally, let's update the current file tracking complete metagenomes.
+```
+metagenome_version=1 
+echo -e "$tolid,$metagenome_version,$dir/assembly/draft/$tolid.metagenome.$date/$tolid.metagenome" \
+	>> /nfs/users/nfs_n/ng13/metagenome_dirs.csv
+```
