@@ -3,6 +3,7 @@
 # metagenome_curation_request.sh
 
 grit_email="grit-jira@sanger.ac.uk"
+# grit_email="ng13@sanger.ac.uk"
 yaml=$1
 
 stats_line=`grep -n $'^stats:' $yaml | cut -d':' -f1`

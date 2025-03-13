@@ -110,7 +110,6 @@ def gtdb2ncbi(gtdb_lineage, txdmp_dict, altname_dict):
                 ncbi_taxon = "Bacteria bacterium"
             return ncbi_lineage + "," + ncbi_taxon + "," + ncbi_taxid + "\n"
 
-
 def main(args):
     argument_check(args)
     txdmp_dict = store_ncbi_txdmp(args.ncbi_taxdmp_dir[0])

@@ -151,14 +151,15 @@ fi
 # contig_info=/lustre/scratch124/tol/projects/darwin/users/ng13/asg/data/protists/Heterometopus_palaeformis/working/piHetPala1.meta-mdbg.20230726/contig_info.tsv
 # outdir=/lustre/scratch124/tol/projects/darwin/users/ng13/asg/data/protists/Heterometopus_palaeformis/working/piHetPala1.meta-mdbg.20230726/map_output/bin_data_csvs
 
-bin_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^bin_id$' | cut -d':' -f1`
-qual_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^quality$' | cut -d':' -f1`
-gtdb_class_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^classification$' | cut -d':' -f1`
-ncbi_class_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^ncbi_classification$' | cut -d':' -f1`
-species_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^ncbi_taxon$' | cut -d':' -f1`
-drep_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^drep$' | cut -d':' -f1`
-completeness_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^Completeness$' | cut -d':' -f1`
-contamination_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^Contamination$' | cut -d':' -f1`
+bin_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^bin_id$' | head -1 | cut -d':' -f1`
+qual_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^quality$' | head -1 | cut -d':' -f1`
+gtdb_class_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^classification$' | head -1 | cut -d':' -f1`
+ncbi_class_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^ncbi_classification$' | head -1 | cut -d':' -f1`
+species_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^ncbi_taxon$' | head -1 | cut -d':' -f1`
+drep_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^drep$' | head -1 | cut -d':' -f1`
+completeness_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^Completeness$' | head -1 | cut -d':' -f1`
+contamination_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^Contamination$' | head -1 | cut -d':' -f1`
+accession_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^assembly_accession$' | head -1 | cut -d':' -f1`
 
 rm -rf $outdir/*
 mkdir -p $outdir/tmp
@@ -175,6 +176,7 @@ do
 	drep=`grep ",$bin," $bin_data | cut -d',' -f$drep_col`
 	completeness=`grep ",$bin," $bin_data | cut -d',' -f$completeness_col`
 	contamination=`grep ",$bin," $bin_data | cut -d',' -f$contamination_col`
+	asm_acc=`grep ','$bin',' $bin_data | cut -d',' -f$accession_col`
 	groups="domain phylum class order family genus species"
 	rm -rf $outdir/tmp/gtdb.class.csv
 	for group in $groups
@@ -242,6 +244,14 @@ do
 			tax=`echo $line | cut -d',' -f2`
 			echo "\"$contig\",\"$tax\"" >> $outdir/ncbi_$group.csv
 		done < $outdir/tmp/ncbi.class.csv
+		if [ "$asm_acc" != "" ]
+		then
+			if ! test -f $outdir/binned_assembly_accession.csv
+			then
+				echo '"identifier","binned_assembly_accession"' > $outdir/binned_assembly_accession.csv
+			fi
+			echo "\"$contig\",\"$asm_acc\"" >> $outdir/binned_assembly_accession.csv
+		fi
 		if [ "$biosample" != "" ]
 		then
 			if ! test -f $outdir/biosample.csv

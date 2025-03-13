@@ -1,14 +1,18 @@
 #!/usr/bin/env Rscript
 if (!require("pacman", quietly = TRUE)) 
   install.packages("pacman")
-pacman::p_load(tidyverse, TreeTools,ggnewscale, RColorBrewer, optparse, phytools,
-               svglite)
+pacman::p_load(TreeTools, ggnewscale, RColorBrewer, optparse, 
+               phytools, svglite)
 
 if (!require("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 if (!require(ggtree))
   BiocManager::install("ggtree")
 
+library(TreeTools,ggnewscale, RColorBrewer, optparse, 
+        phytools, svglite)
+
+library(ggtree)
 ###################
 # Functions #
 getDescendantTips <- function(tree, node){

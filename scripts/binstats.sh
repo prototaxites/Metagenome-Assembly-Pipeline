@@ -466,12 +466,18 @@ then
 	then
 		echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Dereplicating bins with DREP ####" >> $logout/mag_pipe_progress.log
 		echo "#### BINSTATS WRAPPER ($binning_program-$refinement_tool): Dereplicating bins with DREP ####"
-		singularity exec -B /lustre,/nfs \
-			$LOCAL_IMAGES/drep.sif \
-				dRep dereplicate drep \
-					-p 30  \
-					-g $outdir/drep/prefilter/*.$extension \
-					--genomeInfo $outdir/drep/checkm.csv
+		source ~/score_mags/bin/activate
+		dRep dereplicate drep \
+			-p 30  \
+			-g $outdir/drep/prefilter/*.$extension \
+			--genomeInfo $outdir/drep/checkm.csv
+		deactivate
+		# singularity exec -B /lustre,/nfs \
+		# 	$LOCAL_IMAGES/drep.sif \
+		# 		dRep dereplicate drep \
+		# 			-p 30  \
+		# 			-g $outdir/drep/prefilter/*.$extension \
+		# 			--genomeInfo $outdir/drep/checkm.csv
 		if ! test -d $outdir/drep/dereplicated_genomes || [ `ls $outdir/drep/dereplicated_genomes | wc -l` -eq 0 ] || [ `ls $outdir/drep/prefilter/ | grep $extension$'$' | wc -l` -eq 0 ]
 		then
 			echo -e "$prefix\t$binning_program\t$refinement_tool\tdrep" >> $ERROR_OUT

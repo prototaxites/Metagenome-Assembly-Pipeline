@@ -1092,13 +1092,23 @@ then
 		for magdir in $cr_outdir/*
 		do
 			bin_tolid=`basename $magdir`
-			echo "Submitting curation request for \"$bin_tolid\"."
-			if test -f $magdir/$bin_tolid.yaml
+			if [ "$bin_tolid" != "blocklist.txt" ]
 			then
-				# echo "$bin_tolid"
-				metagenome_curation_request.sh $magdir/$bin_tolid.yaml
-			else
-				echo "ERROR: Could not find yaml $magdir/$bin_tolid.yaml"
+				if ! test -f $cr_outdir/blocklist.txt || ( test -f $cr_outdir/blocklist.txt && ! `grep -q $'^'$bin_tolid$'$' $cr_outdir/blocklist.txt` )
+				then
+					if test -f $magdir/$bin_tolid.yaml
+					then
+						echo "Submitting curation request for \"$bin_tolid\"."
+						sleep_time=`shuf -i20-100 -n1`
+						sleep_time=300
+						sleep $sleep_time
+						metagenome_curation_request.sh $magdir/$bin_tolid.yaml
+					else
+						echo "ERROR: Could not find yaml $magdir/$bin_tolid.yaml"
+					fi
+				else
+					echo "Skipping $bin_tolid"
+				fi
 			fi
 		done
 	fi
@@ -1107,21 +1117,56 @@ fi
 
 if [ "$command" == "create_btk" ]
 then
+	host_tolid=`tail -n +2 $bin_data | head -1 | cut -d',' -f1`
+	curl -L "https://docs.google.com/spreadsheets/d/1RKubj10g13INd4W7alHkwcSVX_0CRvNq0-SRe21m-GM/export?gid=1641921323&format=csv" \
+		> ~/primary_accession_data.csv
+	grep $host_tolid ~/primary_accession_data.csv \
+		> $outdir/primary_accession_data.csv
+	bioproject_col=`head -1 ~/primary_accession_data.csv | sed "s|,|\n|g" | grep -n $'^bioproject$' | cut -d':' -f1`
+	bioproject=`head -1 $outdir/primary_accession_data.csv | cut -d',' -f$bioproject_col`
+	curl -X 'GET' \
+	  "https://www.ebi.ac.uk/ena/portal/api/filereport?result=analysis&accession=$bioproject&fields=accession%2Canalysis_title&format=tsv" \
+	  -H 'accept: */*' \
+		  | tail -n +2 | awk '{OFS=","; print $4,$1}' \
+		  > $outdir/accessions.csv
+	curl -X 'GET' \
+	  "https://www.ebi.ac.uk/ena/portal/api/filereport?result=assembly&accession=$bioproject&fields=accession%2Cassembly_title&format=tsv" \
+	  -H 'accept: */*' \
+		  | tail -n +2 | awk '{OFS=","; print $2,$1}' \
+			  >> $outdir/accessions.csv
 	if ! test -f $outdir/bin_data/other_bin_info.csv || [ `cat $outdir/bin_data/other_bin_info.csv | wc -l` -eq 0 ] || [ "$force" == "true" ]
 	then
-		echo $assembly
-		echo $outdir
+		tolid_col=`head -1 $bin_data | sed "s|,|\n|g" | grep -n $'^tolid$' | cut -d':' -f1`
+		header=`head -1 $bin_data`
+		echo "$header,assembly_accession" > $outdir/bindata.updated.csv
+		while read line
+		do
+			if ! `echo $line | grep -q $'^host,'`
+			then
+				bin_tolid=`echo $line | cut -d',' -f$tolid_col`
+				echo $bin_tolid
+				asm_accession=`grep $'^'$bin_tolid$'\.' $outdir/accessions.csv \
+					| cut -d',' -f2`
+				if [ "$asm_accession" == "" ]
+				then
+					echo "ERROR: Could not find accession for $bin_tolid"
+					# exit -1
+					asm_accession="NOT_FOUND"
+				fi
+				echo "$line,$asm_accession" >> $outdir/bindata.updated.csv
+			fi
+		done < $bin_data				
 		bin_data2csvs.sh \
 			-a $assembly \
 			-d $bindir \
 			-R $bindir/output_bins \
-			-b $bin_data \
+			-b $outdir/bindata.updated.csv \
 			-x $biosample_accessions \
 			-C $contig_info \
 			-o $outdir/bin_data
 	fi
 	if [ "$btk_dir" != "" ]
-	then
+	then		
 		mkdir -p $outdir/btk_dataset
 		cp -R $btk_dir/* $outdir/btk_dataset
 		singularity exec -B /lustre,/nfs \
@@ -1167,9 +1212,22 @@ then
 			$LOCAL_IMAGES/blobtoolkit.sif \
 				blobtools create \
 					$outdir/btk_dataset
+		primary_accession=`grep "$specimen.metagenome" $outdir/accessions.csv | cut -d',' -f2`
+		primary_biosample_col=`head -1 ~/primary_accession_data.csv | sed "s|,|\n|g" | grep -n $'^biosample$' | cut -d':' -f1`
+		primary_biosample=`grep ','$bioproject"," ~/primary_accession_data.csv | cut -d',' -f$primary_biosample_col`
+		singularity exec -B /lustre,/nfs \
+			$LOCAL_IMAGES/blobtoolkit.sif \
+				blobtools replace \
+					--key assembly.accession=$primary_accession \
+					--key assembly.bioproject=$bioproject \
+					--key assembly.biosample=$primary_biosample \
+					--key assembly.alias="$specimen.metagenome.1" \
+					--key assembly.file="$dir/assembly/draft/$specimen.metagenome.$date/$specimen.metagenome.fa.gz" \
+					--key plot.cat="ncbi_family" \
+					$outdir/btk_dataset
 		cp -R $outdir/btk_dataset \
-			/lustre/scratch123/tol/share/grit-btk-prod/blobplots/$specimen.metagenome.$metagenome_version
-		curl -s 'https://grit-btk-api.tol.sanger.ac.uk/api/v1/search/reload/testkey%20npm%20start'
+			/lustre/scratch123/tol/share/mg-btk/blobplots/$specimen.metagenome.$metagenome_version
+		curl -s 'https://metagenomes-api.genomehubs.org/api/v1/search/reload/testkey%20npm%20start'
 	fi
 fi
 	
