@@ -326,6 +326,7 @@ A recent addition to this pipeline that has not been integrated well yet is the
 classification of circular contigs as plasmids/chromosomes.
 
 ```bash
+export GENOMAD_DB=/lustre/scratch124/tol/projects/darwin/users/ng13/genomad_db
 metagenome_submission.sh generate_chromosome_list \
 	-B $binning_program \
 	-d $mag_dir \
@@ -335,6 +336,7 @@ metagenome_submission.sh generate_chromosome_list \
 ```
 
 You may need to queue this command as it will run [geNomad](https://github.com/apcamargo/genomad) on all circular contigs.
+While this is running you can move to the next step (updating the informatics spreadsheet).
 
 The output from this command with be a file of circular contig annotations, `chromosome_list.tsv`.
 
