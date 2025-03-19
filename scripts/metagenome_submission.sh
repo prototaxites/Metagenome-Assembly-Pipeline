@@ -725,9 +725,9 @@ then
 		# echo $bin
 		line=`grep ","$bin"," $bin_data`
 		tolid_taxon=`echo $line | awk -F',' -v N=$taxon_field '{print $(N-1)}' | sed "s|[uU]ncultured ||g" | sed "s| bacterium||g" | sed "s| |_|g" | sed "s|sp\.|sp|g" | sed "s| archaeon||g" | sed "s|[Cc]andidatus_||g"`
-		if [ `echo "$tolid_taxon" | wc -c` -gt 46 ]
+		if [ `echo "$tolid_taxon" | wc -c` -gt 32 ]
 		then
-			tolid_taxon=${tolid_taxon:0:46}
+			tolid_taxon=${tolid_taxon:0:32}
 		fi
 		if ! test -f $outdir/taxon_tally.tmp.txt || ! `grep -q $tolid_taxon$'\t' $outdir/taxon_tally.tmp.txt`
 		then
@@ -843,6 +843,11 @@ then
 			| cut -f1`
 		for contig in $contigs
 		do
+			if ! `grep -q $contig$'\t' $contig_info`
+			then
+				echo "ERROR: $contig not found in $contig_info"
+				exit 1
+			fi
 			if [ `grep $contig$'\t' $contig_info | cut -f4` == "Y" ]
 			then
 				echo $contig >> $outdir/circ.tmp.list
@@ -995,6 +1000,11 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 		echo "Prepping $bin"
 		rm -rf $outdir/bin.tmp.fa
 		bin_tolid=`grep $'^'$bin"," $biosample_accessions | cut -d',' -f2`
+		if [ `echo $bin_tolid | wc -c` -gt 47 ]
+		then
+			echo "ERROR: Sequence name length $bin_tolid exceeds limit (47 characters)"
+			exit 1
+		fi
 		bin_file=`ls $bindir/output_bins | grep $bin.$'fa.*'`
 		bin_species=`grep ",$bin," $bin_data | awk -F',' -v N=$species_field '{print $N}'`
 		bin_quality=`grep ",$bin," $bin_data | awk -F',' -v N=$quality_field '{print $N}'`
@@ -1022,6 +1032,10 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 				cp $bindir/output_bins/$bin_file $outdir/bin.tmp.fa
 			fi
 			contigs=`grep $'^>' $outdir/bin.tmp.fa | cut -d'>' -f2`
+			if [ "$assembly_type" == "Metagenome-Assembled Genome (MAG)" ] && [ `echo $contigs | wc -w` -eq 1 ] && ( [ "$chromosome_list" == "" ] || ! `grep -q "$contigs" $chromosome_list` )
+			then
+				echo "ERROR: $bin is classified as MAG and has only one contig. A chromosome label is required for submission."
+			fi
 			contig_num=1
 			chrom_num=1
 			rm -rf $submission_dir/chromosome_list.tsv
