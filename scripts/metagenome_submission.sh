@@ -812,7 +812,7 @@ fi
 ######################################################################################
 #### CHROMOSOME LIST ####
 ##########################
-
+#
 if [ "$command" == "generate_chromosome_list" ]
 then
 	. $biosample_configs
@@ -997,6 +997,16 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 	bins=`tail -n +2 $bin_data | awk -F',' -v N=$bin_field '{print $N}'`
 	for bin in $bins
 	do
+		bin_file=`ls $bindir/output_bins | grep $bin.$'fa.*'`
+		if [ "$bin_file" == "" ]
+		then
+			echo "ERROR: Could not find bin file in \'$bindir/output_bins\'."
+			exit 1
+		elif [ `head $bin_file | wc -l` -eq 0 ]
+		then
+			echo "ERROR: $binfile is empty."
+			exit 1
+		fi
 		echo "Prepping $bin"
 		rm -rf $outdir/bin.tmp.fa
 		bin_tolid=`grep $'^'$bin"," $biosample_accessions | cut -d',' -f2`
@@ -1005,7 +1015,6 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 			echo "ERROR: Sequence name length $bin_tolid exceeds limit (47 characters)"
 			exit 1
 		fi
-		bin_file=`ls $bindir/output_bins | grep $bin.$'fa.*'`
 		bin_species=`grep ",$bin," $bin_data | awk -F',' -v N=$species_field '{print $N}'`
 		bin_quality=`grep ",$bin," $bin_data | awk -F',' -v N=$quality_field '{print $N}'`
 		bin_drep=`grep ",$bin," $bin_data | awk -F',' -v N=$drep_field '{print $N}'`
