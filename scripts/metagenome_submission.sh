@@ -1002,7 +1002,7 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 		then
 			echo "ERROR: Could not find bin file in \'$bindir/output_bins\'."
 			exit 1
-		elif [ `head $bin_file | wc -l` -eq 0 ]
+		elif [ `head $bindir/output_bins/$bin_file | wc -l` -eq 0 ]
 		then
 			echo "ERROR: $binfile is empty."
 			exit 1
@@ -1199,7 +1199,8 @@ then
 					--text-delimiter ',' \
 					--text-header \
 					--replace \
-					$outdir/btk_dataset
+					$outdir/btk_dataset \
+					--text-no-array
 		files=`ls $outdir/bin_data/*.csv \
 			| grep -v 'ncbi' \
 			| grep -v 'gtdb' \
@@ -1213,7 +1214,8 @@ then
 						--text-delimiter ',' \
 						--text-header \
 						--replace \
-						$outdir/btk_dataset
+						$outdir/btk_dataset \
+						--text-no-array
 		done
 		groups="domain phylum class order family genus species"
 		dbs="gtdb ncbi"
@@ -1228,7 +1230,8 @@ then
 							--text-delimiter ',' \
 							--text-header \
 							--replace \
-							$outdir/btk_dataset
+							$outdir/btk_dataset \
+							--text-no-array
 			done
 		done
 		singularity exec -B /lustre,/nfs \
