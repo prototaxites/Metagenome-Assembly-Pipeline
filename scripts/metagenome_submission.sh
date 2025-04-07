@@ -731,7 +731,7 @@ then
 			| sed "s|[- ]|_|g" \
 			| sed "s| archaeon||g" \
 			| sed "s|[Cc]andidatus_||g" \
-			| | sed "s|[().:]||g" | sed "s|[[]]||g" | sed "s|\"||g"`
+			| sed "s|[().:]||g" | sed "s|[[]]||g" | sed "s|\"||g"`
 		if [ `echo "$tolid_taxon" | wc -c` -gt 32 ]
 		then
 			tolid_taxon=${tolid_taxon:0:32}
