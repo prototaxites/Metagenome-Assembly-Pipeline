@@ -724,7 +724,14 @@ then
 	do
 		# echo $bin
 		line=`grep ","$bin"," $bin_data`
-		tolid_taxon=`echo $line | awk -F',' -v N=$taxon_field '{print $(N-1)}' | sed "s|[uU]ncultured ||g" | sed "s| bacterium||g" | sed "s| |_|g" | sed "s|sp\.|sp|g" | sed "s| archaeon||g" | sed "s|[Cc]andidatus_||g"`
+		tolid_taxon=`echo $line \
+			| awk -F',' -v N=$taxon_field '{print $(N-1)}' \
+			| sed "s|[uU]ncultured ||g" \
+			| sed "s| bacterium||g" \
+			| sed "s|[- ]|_|g" \
+			| sed "s| archaeon||g" \
+			| sed "s|[Cc]andidatus_||g" \
+			| | sed "s|[().:]||g" | sed "s|[[]]||g" | sed "s|\"||g"`
 		if [ `echo "$tolid_taxon" | wc -c` -gt 32 ]
 		then
 			tolid_taxon=${tolid_taxon:0:32}
