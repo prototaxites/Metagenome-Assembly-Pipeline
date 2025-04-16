@@ -974,7 +974,7 @@ then
 	# YAML for Curation Request: Primary Metagenome #
 		echo -e \
 "---
-species: $primary_taxon
+species: \"$primary_taxon\"
 specimen: $tol_id.metagenome
 projects:
   - $outproject
@@ -1071,7 +1071,7 @@ stats: |" > $filesout/$tol_id.metagenome.yaml
 			gzip -c $outdir/bin.tmp.fa > $submission_dir/$bin_tolid.fa.gz
 			echo -e \
 "---
-species: $bin_species
+species: \"$bin_species\"
 specimen: $bin_tolid
 projects:
   - $outproject
@@ -1245,7 +1245,7 @@ then
 			$LOCAL_IMAGES/blobtoolkit.sif \
 				blobtools create \
 					$outdir/btk_dataset
-		primary_accession=`grep "$specimen.metagenome" $outdir/accessions.csv | cut -d',' -f2`
+		primary_accession=`grep "$host_tolid.metagenome" $outdir/accessions.csv | cut -d',' -f2`
 		primary_biosample_col=`head -1 ~/primary_accession_data.csv | sed "s|,|\n|g" | grep -n $'^biosample$' | cut -d':' -f1`
 		primary_biosample=`grep ','$bioproject"," ~/primary_accession_data.csv | cut -d',' -f$primary_biosample_col`
 		singularity exec -B /lustre,/nfs \
@@ -1254,12 +1254,12 @@ then
 					--key assembly.accession=$primary_accession \
 					--key assembly.bioproject=$bioproject \
 					--key assembly.biosample=$primary_biosample \
-					--key assembly.alias="$specimen.metagenome.1" \
-					--key assembly.file="$dir/assembly/draft/$specimen.metagenome.$date/$specimen.metagenome.fa.gz" \
+					--key assembly.alias="$host_tolid.metagenome.1" \
+					--key assembly.file="$dir/assembly/draft/$host_tolid.metagenome.$date/$host_tolid.metagenome.fa.gz" \
 					--key plot.cat="ncbi_family" \
 					$outdir/btk_dataset
 		cp -R $outdir/btk_dataset \
-			/lustre/scratch123/tol/share/mg-btk/blobplots/$specimen.metagenome.$metagenome_version
+			/lustre/scratch123/tol/share/mg-btk/blobplots/$host_tolid.metagenome.$metagenome_version
 		curl -s 'https://metagenomes-api.genomehubs.org/api/v1/search/reload/testkey%20npm%20start'
 	fi
 fi
