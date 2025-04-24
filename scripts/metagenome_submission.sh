@@ -1258,6 +1258,7 @@ then
 					--key assembly.file="$dir/assembly/draft/$host_tolid.metagenome.$date/$host_tolid.metagenome.fa.gz" \
 					--key plot.cat="ncbi_family" \
 					$outdir/btk_dataset
+		rm -rf /lustre/scratch123/tol/share/mg-btk/blobplots/$host_tolid.metagenome.$metagenome_version
 		cp -R $outdir/btk_dataset \
 			/lustre/scratch123/tol/share/mg-btk/blobplots/$host_tolid.metagenome.$metagenome_version
 		curl -s 'https://metagenomes-api.genomehubs.org/api/v1/search/reload/testkey%20npm%20start'
